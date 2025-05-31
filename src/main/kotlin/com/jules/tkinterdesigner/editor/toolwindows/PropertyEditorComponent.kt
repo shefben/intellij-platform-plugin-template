@@ -128,26 +128,47 @@ class PropertyEditorComponent(private val project: Project) : JBPanel<PropertyEd
         generateCodeButton.isEnabled = false
 
         project.messageBus.connect(this).subscribe(WIDGET_SELECTION_TOPIC, object : WidgetSelectionListener {
-            override fun widgetSelected(widget: DesignedWidget?, dialog: DesignedDialog?) {
-                currentSelectedWidget = widget
+            override fun widgetSelected(primaryWidget: DesignedWidget?, allSelectedIds: Set<String>, dialog: DesignedDialog?) {
+                currentSelectedWidget = primaryWidget // This is the primary for property display
                 currentDesignDialog = dialog
-                displayProperties(widget)
-                generateCodeButton.isEnabled = dialog != null
+
+                if (allSelectedIds.size > 1) {
+                    titleLabel.text = "${allSelectedIds.size} widgets selected"
+                    tableModel.updateData(null, null, emptyList()) // Clear properties table for multi-select
+                } else if (primaryWidget != null) {
+                    titleLabel.text = "Properties: ${primaryWidget.type} (${primaryWidget.properties["name"] ?: primaryWidget.id})"
+                    val propertyDefinitions = WidgetPropertyRegistry.propertiesForType[primaryWidget.type] ?: emptyList()
+                    val propertyPairs = propertyDefinitions.map { propDef ->
+                        Pair(propDef, primaryWidget.properties.getOrDefault(propDef.name, propDef.defaultValue))
+                    }
+                    tableModel.updateData(primaryWidget, currentDesignDialog, propertyPairs)
+                } else { // No selection or primary is null
+                    titleLabel.text = "No widget selected."
+                    tableModel.updateData(null, null, emptyList())
+                }
+                generateCodeButton.isEnabled = dialog != null // Enable if any dialog context
             }
         })
     }
 
-    private fun displayProperties(selectedWidget: DesignedWidget?) {
-        if (selectedWidget == null) {
+    // displayProperties is effectively merged into the listener above
+    // private fun displayProperties(selectedWidget: DesignedWidget?) { ... }
+    // If separate calls are needed, ensure it handles the multi-select case:
+    private fun updateDisplayForSelection(primaryWidget: DesignedWidget?, selectedCount: Int) {
+        if (selectedCount > 1) {
+            titleLabel.text = "$selectedCount widgets selected"
+            tableModel.updateData(null, null, emptyList())
+        } else if (primaryWidget != null) {
+            titleLabel.text = "Properties: ${primaryWidget.type} (${primaryWidget.properties["name"] ?: primaryWidget.id})"
+            val propertyDefinitions = WidgetPropertyRegistry.propertiesForType[primaryWidget.type] ?: emptyList()
+            val propertyPairs = propertyDefinitions.map { propDef ->
+                Pair(propDef, primaryWidget.properties.getOrDefault(propDef.name, propDef.defaultValue))
+            }
+            tableModel.updateData(primaryWidget, currentDesignDialog, propertyPairs)
+        } else {
             titleLabel.text = "No widget selected."
             tableModel.updateData(null, null, emptyList())
-        } else {
-            titleLabel.text = "Properties: ${selectedWidget.type} (${selectedWidget.properties["name"] ?: selectedWidget.id})"
-            val propertyDefinitions = WidgetPropertyRegistry.propertiesForType[selectedWidget.type] ?: emptyList()
-            val propertyPairs = propertyDefinitions.map { propDef ->
-                Pair(propDef, selectedWidget.properties.getOrDefault(propDef.name, propDef.defaultValue))
-            }
-            tableModel.updateData(selectedWidget, currentDesignDialog, propertyPairs)
         }
+        generateCodeButton.isEnabled = currentDesignDialog != null
     }
 }

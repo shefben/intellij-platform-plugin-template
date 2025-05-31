@@ -2,7 +2,8 @@ package com.jules.tkinterdesigner.editor.toolwindows
 
 import com.intellij.openapi.fileChooser.FileChooser
 import com.intellij.openapi.fileChooser.FileChooserDescriptor
-import com.intellij.openapi.project.Project
+import com.intellij.openapi.project.Project // Already present, ensure it's used
+import com.intellij.openapi.vfs.VfsUtilCore
 import com.intellij.ui.components.JBTextField
 import java.awt.BorderLayout
 import java.awt.Component
@@ -12,23 +13,22 @@ import javax.swing.*
 import javax.swing.table.TableCellEditor
 
 class FilePathPropertyEditor(
-    private val project: Project?, // Project is needed for FileChooser
+    private val project: Project, // Changed to non-nullable, will be passed from PropertyEditorComponent
     private val parentComponentForDialog: Component
 ) : AbstractCellEditor(), TableCellEditor, ActionListener {
 
     private val panel = JPanel(BorderLayout())
-    private val textField = JBTextField()
+    private val pathTextField = JBTextField() // Renamed for clarity
     private val button = JButton("...")
 
-    private var currentPath: String? = null
+    // private var currentPath: String? = null // Not strictly needed as state here, text field holds it
 
     init {
-        panel.add(textField, BorderLayout.CENTER)
+        panel.add(pathTextField, BorderLayout.CENTER)
         panel.add(button, BorderLayout.EAST)
         button.addActionListener(this)
 
-        // Stop editing when focus is lost from the text field, committing the typed value
-        textField.addFocusListener(object : java.awt.event.FocusAdapter() {
+        pathTextField.addFocusListener(object : java.awt.event.FocusAdapter() {
             override fun focusLost(e: java.awt.event.FocusEvent?) {
                 fireEditingStopped()
             }
@@ -39,45 +39,39 @@ class FilePathPropertyEditor(
         table: JTable, value: Any?,
         isSelected: Boolean, row: Int, column: Int
     ): Component {
-        currentPath = value as? String ?: ""
-        textField.text = currentPath
+        // currentPath = value as? String ?: "" // Store if needed for comparison, but textField is source of truth
+        pathTextField.text = value as? String ?: ""
         return panel
     }
 
     override fun getCellEditorValue(): Any? {
-        // Return the text from the text field, which might have been manually edited
-        // or set by the file chooser.
-        return textField.text
+        return pathTextField.text
     }
 
     override fun actionPerformed(e: ActionEvent) {
         if (e.source == button) {
             val descriptor = FileChooserDescriptor(
-                true, // choose files
-                false, // choose folders
-                false, // choose jars
-                false, // choose jar contents
-                false, // choose multiple
-                false // choose archives
+                true, false, false, false, false, false
             ).withTitle("Select Image File")
              .withFileFilter { vf ->
-                 // Allow common image extensions; case-insensitive
                  val ext = vf.extension?.toLowerCase()
                  ext in listOf("png", "gif", "jpg", "jpeg", "ico", "bmp", "ppm", "pgm")
              }
 
+            val baseDirToOpen = project.baseDir // Or determine a more specific starting directory
 
-            // If project is null, file chooser might not work well or might show a default context.
-            // For a proper project-contextual file chooser, project should ideally not be null.
-            val chosenFile = FileChooser.chooseFile(descriptor, project, parentComponentForDialog, null)
+            val chosenFile = FileChooser.chooseFile(descriptor, project, parentComponentForDialog, baseDirToOpen)
 
             if (chosenFile != null) {
-                textField.text = chosenFile.path
-                currentPath = chosenFile.path
-                fireEditingStopped() // Signal that editing is done and value can be retrieved
-            } else {
-                // Optional: if you want to cancel editing if no file is chosen
-                // fireEditingCanceled()
+                val relativePath = project.baseDir?.let { VfsUtilCore.getRelativePath(chosenFile, it, '/') }
+
+                if (relativePath != null) {
+                    pathTextField.text = relativePath
+                } else {
+                    pathTextField.text = chosenFile.path // Fallback to absolute path
+                }
+                // currentPath = pathTextField.text // Update if currentPath member is used
+                fireEditingStopped()
             }
         }
     }

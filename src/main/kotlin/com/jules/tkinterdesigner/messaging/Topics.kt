@@ -7,9 +7,10 @@ import com.jules.tkinterdesigner.model.DesignedDialog // Potentially needed if e
 /**
  * Listener for when a widget is selected or deselected in the VisualCanvasPanel.
  * If widget is null, it means selection was cleared.
+ * allSelectedIds provides the full set of currently selected widget IDs.
  */
 interface WidgetSelectionListener {
-    fun widgetSelected(widget: DesignedWidget?, dialog: DesignedDialog?) // Added dialog context
+    fun widgetSelected(primaryWidget: DesignedWidget?, allSelectedIds: Set<String>, dialog: DesignedDialog?)
 }
 
 val WIDGET_SELECTION_TOPIC = Topic.create("TkinterDesigner.WidgetSelected", WidgetSelectionListener::class.java)
