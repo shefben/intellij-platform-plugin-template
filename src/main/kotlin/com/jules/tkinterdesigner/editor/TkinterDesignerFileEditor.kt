@@ -1,90 +1,140 @@
 package com.jules.tkinterdesigner.editor
 
+import com.intellij.openapi.application.ApplicationManager
+import com.intellij.openapi.diagnostic.thisLogger
+import com.intellij.openapi.editor.Document
+import com.intellij.openapi.fileEditor.FileDocumentManager
+import com.intellij.openapi.fileEditor.FileDocumentManagerListener
 import com.intellij.openapi.fileEditor.FileEditorState
 import com.intellij.openapi.fileEditor.impl.FileEditorBase
 import com.intellij.openapi.project.Project
-import com.intellij.openapi.util.Key
 import com.intellij.openapi.vfs.VirtualFile
-import com.jules.tkinterdesigner.model.DesignedDialog // For user data key
-import com.jules.tkinterdesigner.toolWindow.TkinterDesignerPanel // Corrected import
+import com.intellij.testFramework.LightVirtualFile // For new files
+import com.intellij.util.messages.MessageBusConnection
+import com.jules.tkinterdesigner.model.DESIGNED_DIALOG_KEY
+import com.jules.tkinterdesigner.model.DesignedDialog
+import com.jules.tkinterdesigner.model.DesignedWidget // For listener
+import com.jules.tkinterdesigner.messaging.WIDGET_MODIFIED_TOPIC
+import com.jules.tkinterdesigner.messaging.WidgetPropertyListener
+import com.jules.tkinterdesigner.toolWindow.TkinterDesignerPanel
+import kotlinx.serialization.json.Json
 import javax.swing.JComponent
-
-// Define a key for storing DesignedDialog in VirtualFile's user data (optional for now, but good practice)
-import com.intellij.openapi.wm.ToolWindowManager
-
-// val DESIGNED_DIALOG_KEY: Key<DesignedDialog> = Key.create("TkinterDesigner.DesignedDialog")
 
 class TkinterDesignerFileEditor(private val project: Project, private val virtualFile: VirtualFile) : FileEditorBase() {
 
     private val designerPanel: TkinterDesignerPanel
+    private val json = Json { prettyPrint = true; encodeDefaults = true; ignoreUnknownKeys = true }
+    private var isDirtyInternal: Boolean = false
+    private var projectMessageBusConnection: MessageBusConnection? = null
+
 
     init {
-        val dialog = virtualFile.getUserData(com.jules.tkinterdesigner.model.DESIGNED_DIALOG_KEY)
-            ?: run {
-                // Fallback if not found, though action should always set it.
-                // Log this or handle as an error if critical.
-                println("Warning: DESIGNED_DIALOG_KEY not found in VirtualFile. Creating new Dialog.")
-                val newDialog = DesignedDialog()
-                newDialog.title = virtualFile.nameWithoutExtension
-                virtualFile.putUserData(com.jules.tkinterdesigner.model.DESIGNED_DIALOG_KEY, newDialog) // Store it back
-                newDialog
+        var dialog = virtualFile.getUserData(DESIGNED_DIALOG_KEY)
+        if (dialog == null && virtualFile !is LightVirtualFile && virtualFile.exists() && virtualFile.length > 0) { // Try loading from actual file content
+            try {
+                val jsonString = String(virtualFile.contentsToByteArray(), Charsets.UTF_8)
+                if (jsonString.isNotBlank()) {
+                    dialog = json.decodeFromString(DesignedDialog.serializer(), jsonString)
+                    virtualFile.putUserData(DESIGNED_DIALOG_KEY, dialog) // Cache in user data
+                }
+            } catch (e: Exception) {
+                thisLogger().error("Error decoding DesignedDialog from VirtualFile content: ${virtualFile.path}", e)
+                // Fallback to new dialog if load fails
             }
+        }
+
+        if (dialog == null) { // Still null (new LightVirtualFile or error loading existing file)
+            dialog = DesignedDialog()
+            dialog.title = virtualFile.nameWithoutExtension
+            virtualFile.putUserData(DESIGNED_DIALOG_KEY, dialog)
+            if (virtualFile !is LightVirtualFile) isDirtyInternal = true // Mark new non-Light files as dirty to prompt save
+        }
+
         designerPanel = TkinterDesignerPanel(project, dialog)
+        setupListeners()
     }
+
+    private fun setupListeners() {
+        projectMessageBusConnection = project.messageBus.connect(this) // Use 'this' as disposable
+        projectMessageBusConnection?.subscribe(WIDGET_MODIFIED_TOPIC, object : WidgetPropertyListener {
+            override fun propertyChanged(widget: DesignedWidget, dialog: DesignedDialog?) {
+                if (dialog == virtualFile.getUserData(DESIGNED_DIALOG_KEY)) {
+                    markDirty(true)
+                }
+            }
+        })
+
+        // Listen to IDE save events to push model to LightVirtualFile content
+        // For real files, the IDE handles it if Document is saved.
+        // For LightVirtualFile, we need to ensure its content is updated before IDE "saves" it (e.g. for undo buffer).
+        // Using AppTopics.FILE_DOCUMENT_SYNC for this.
+        ApplicationManager.getApplication().messageBus.connect(this)
+            .subscribe(com.intellij.AppTopics.FILE_DOCUMENT_SYNC, object : FileDocumentManagerListener {
+                override fun beforeDocumentSaving(document: Document) {
+                    val file = FileDocumentManager.getInstance().getFile(document)
+                    if (file == virtualFile) {
+                        saveChangesToVirtualFileContent()
+                    }
+                }
+            })
+    }
+
+
+    private fun markDirty(dirty: Boolean) {
+        isDirtyInternal = dirty
+        // Notify the IDE that the editor's modified state has changed.
+        // This is important for '*' in tab, save prompts, etc.
+        ApplicationManager.getApplication().invokeLater {
+             propertyChangeSupport.firePropertyChange(FileEditorBase.PROP_MODIFIED, !dirty, dirty)
+        }
+    }
+
+    // Pushes the current DesignedDialog model into the LightVirtualFile's in-memory content.
+    // This is called before IntelliJ attempts to "save" the LightVirtualFile (e.g. for its internal state/history).
+    private fun saveChangesToVirtualFileContent() {
+        if (!isModified && virtualFile !is LightVirtualFile) return // Only save if modified, or if it's a LightVirtualFile (always update its content)
+
+        val dialog = virtualFile.getUserData(DESIGNED_DIALOG_KEY) ?: return
+        try {
+            val jsonString = json.encodeToString(DesignedDialog.serializer(), dialog)
+            // For LightVirtualFile, setContent updates its byte array.
+            // For real files, this step would be a direct write to disk if not using IntelliJ's Document system.
+            // Since we are trying to integrate with IDE save, updating content for LightVirtualFile is key.
+            if (virtualFile is LightVirtualFile) {
+                virtualFile.setContent(null, jsonString, System.currentTimeMillis())
+            } else {
+                // For non-LightVirtualFiles, rely on Document saving after this point.
+                // Ensure the Document itself is updated if not already.
+                // This might involve FileDocumentManager.getInstance().getDocument(virtualFile)?.setText(jsonString)
+                // but that could trigger another save cycle.
+                // For now, assume direct save for non-Light files or that Document is already in sync via other means.
+                // The beforeDocumentSaving listener is the primary hook.
+                // If we are saving a "real" file, this method is called *before* its document is saved.
+                // We need to ensure the document has the latest content.
+                val document = FileDocumentManager.getInstance().getDocument(virtualFile)
+                if (document != null) {
+                    ApplicationManager.getApplication().runWriteAction { // Must be in write action to modify document
+                        document.setText(jsonString)
+                    }
+                }
+            }
+            markDirty(false)
+        } catch (e: Exception) {
+            thisLogger().error("Error serializing design to VirtualFile content: ${e.message}", e)
+        }
+    }
+
 
     override fun getComponent(): JComponent = designerPanel
-
     override fun getPreferredFocusedComponent(): JComponent? = designerPanel.visualCanvasPanel
-
-    override fun getName(): String = virtualFile.name // Or a more descriptive name
-
-    override fun setState(state: FileEditorState) {
-        // TODO: Implement state restoration if needed
-    }
-
-    override fun isModified(): Boolean {
-        // TODO: Implement based on changes to designerPanel.visualCanvasPanel.currentDesign
-        return false // For now
-    }
-
+    override fun getName(): String = virtualFile.name
+    override fun setState(state: FileEditorState) { /* TODO */ }
+    override fun isModified(): Boolean = isDirtyInternal
     override fun isValid(): Boolean = virtualFile.isValid
 
     override fun dispose() {
-        // Release resources if any
+        projectMessageBusConnection?.disconnect()
+        // Other disposals if needed
         super.dispose()
-    }
-
-    // TODO: Implement save functionality if isModified can be true
-    // override fun selectNotify() {}
-    // override fun deselectNotify() {}
-    // override fun addPropertyChangeListener(listener: java.beans.PropertyChangeListener) {}
-    // override fun removePropertyChangeListener(listener: java.beans.PropertyChangeListener) {}
-    // override fun getCurrentLocation(): com.intellij.openapi.fileEditor.FileEditorLocation? = null
-
-    override fun selectNotify() {
-        super.selectNotify()
-        // Show tool windows when this editor is selected
-        val toolWindowManager = ToolWindowManager.getInstance(project)
-        toolWindowManager.getToolWindow("TkinterDesigner.WidgetPalette")?.show(null)
-        toolWindowManager.getToolWindow("TkinterDesigner.PropertyEditor")?.show(null)
-
-        // Publish selection of the root dialog or currently selected widget within it
-        // This ensures the property editor updates if it was closed/reopened or missed an event
-        val dialog = virtualFile.getUserData(com.jules.tkinterdesigner.model.DESIGNED_DIALOG_KEY)
-        // Find the currently selected widget ID if any (this state isn't persisted yet, so it would be null on first open)
-        val selectedWidget = designerPanel.visualCanvasPanel.currentDesign.widgets.find {
-            it.id == designerPanel.visualCanvasPanel.getSelectedWidgetId() // Need a getter for selectedWidgetId
-        }
-         project.messageBus.syncPublisher(com.jules.tkinterdesigner.messaging.WIDGET_SELECTION_TOPIC)
-            .widgetSelected(selectedWidget, dialog)
-
-    }
-
-    override fun deselectNotify() {
-        super.deselectNotify()
-        // Optionally hide tool windows when this editor is deselected
-        // val toolWindowManager = ToolWindowManager.getInstance(project)
-        // toolWindowManager.getToolWindow("TkinterDesigner.WidgetPalette")?.hide(null)
-        // toolWindowManager.getToolWindow("TkinterDesigner.PropertyEditor")?.hide(null)
     }
 }

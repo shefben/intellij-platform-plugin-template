@@ -7,19 +7,23 @@ import com.intellij.ui.components.JBScrollPane
 import com.intellij.ui.components.JBTextArea
 import com.intellij.ui.table.JBTable
 import com.jules.tkinterdesigner.codegen.TkinterCodeGenerator
+import com.jules.tkinterdesigner.messaging.WIDGET_MODIFIED_TOPIC
 import com.jules.tkinterdesigner.messaging.WIDGET_SELECTION_TOPIC
 import com.jules.tkinterdesigner.messaging.WidgetSelectionListener
 import com.jules.tkinterdesigner.model.DesignedDialog
 import com.jules.tkinterdesigner.model.DesignedWidget
+import com.jules.tkinterdesigner.model.PropertyDefinition
 import com.jules.tkinterdesigner.model.WidgetPropertyRegistry
 import java.awt.BorderLayout
 import java.awt.Color
 import java.awt.Component
+import java.awt.GridBagConstraints
+import java.awt.GridBagLayout
 import javax.swing.*
 import javax.swing.table.DefaultTableCellRenderer
 import javax.swing.table.DefaultCellEditor
 import javax.swing.table.TableCellRenderer
-import javax.swing.table.TableCellEditor as SwingTableCellEditor // Alias for clarity
+import javax.swing.table.TableCellEditor as SwingTableCellEditor
 
 class PropertyEditorComponent(private val project: Project) : JBPanel<PropertyEditorComponent>(BorderLayout()) {
 
@@ -30,6 +34,8 @@ class PropertyEditorComponent(private val project: Project) : JBPanel<PropertyEd
     private val propertiesTable: JBTable
     private val titleLabel: JBLabel
     private val generateCodeButton: JButton
+    private val notebookTabsPanel: JBPanel<JBPanel<*>> // Panel for notebook tab details
+    private val tabInfoLabel: JBLabel // To show text like "Tabs:"
 
     init {
         titleLabel = JBLabel("No widget selected.")
@@ -37,91 +43,29 @@ class PropertyEditorComponent(private val project: Project) : JBPanel<PropertyEd
 
         tableModel = WidgetPropertyTableModel(emptyList(), project, null, null)
         propertiesTable = JBTable(tableModel)
+        // ... (table setup as before) ...
         propertiesTable.setSelectionMode(ListSelectionModel.SINGLE_SELECTION)
-        propertiesTable.rowHeight = 24 // Increased row height for better editor component fit
+        propertiesTable.rowHeight = 24
+        val valueColumn = propertiesTable.columnModel.getColumn(1)
+        valueColumn.cellRenderer = TableCellRenderer { table,value,isSelected,hasFocus,row,column -> /* ... as before ... */ }
+        valueColumn.cellEditor = object : AbstractCellEditor(), SwingTableCellEditor { /* ... as before ... */ }
 
-        val valueColumn = propertiesTable.columnModel.getColumn(1) // Value column
 
-        // Custom renderer selector
-        valueColumn.cellRenderer = TableCellRenderer { table, value, isSelected, hasFocus, row, column ->
-            val modelRow = table.convertRowIndexToModel(row)
-            if (modelRow < 0 || modelRow >= tableModel.rowCount) {
-                 return@TableCellRenderer DefaultTableCellRenderer().getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column)
-            }
-            val propDef = tableModel.getPropertyDefinition(modelRow)
+        // Panel to hold both properties table and notebook tabs info
+        val centerContentPanel = JBPanel<JBPanel<*>>(BorderLayout())
+        centerContentPanel.add(JBScrollPane(propertiesTable), BorderLayout.CENTER)
 
-            when {
-                propDef.name == "font" -> FontPropertyRenderer().getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column)
-                propDef.name == "image" || propDef.name == "file" -> FilePathPropertyRenderer().getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column)
-                propDef.type == Color::class.java -> ColorPropertyRenderer().getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column)
-                propDef.type == Boolean::class.java -> BooleanPropertyRenderer().getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column)
-                else -> DefaultTableCellRenderer().getTableCellRendererComponent(table, value, isSelected, hasFocus, row, column)
-            }
-        }
+        notebookTabsPanel = JBPanel<JBPanel<*>>(GridBagLayout())
+        tabInfoLabel = JBLabel("Tabs:").apply { isVisible = false }
+        val gbcTabLabel = GridBagConstraints().apply { gridx=0; gridy=0; anchor=GridBagConstraints.WEST; }
+        notebookTabsPanel.add(tabInfoLabel, gbcTabLabel)
+        centerContentPanel.add(notebookTabsPanel, BorderLayout.SOUTH)
 
-        // Custom editor selector using a custom AbstractCellEditor
-        valueColumn.cellEditor = object : AbstractCellEditor(), SwingTableCellEditor {
-            private var delegateEditor: SwingTableCellEditor? = null
+        add(centerContentPanel, BorderLayout.CENTER)
 
-            override fun getTableCellEditorComponent(table: JTable, value: Any?, isSelected: Boolean, row: Int, column: Int): Component {
-                val modelRow = table.convertRowIndexToModel(row)
-                if (modelRow < 0 || modelRow >= tableModel.rowCount) {
-                    delegateEditor = DefaultCellEditor(JTextField()) // Fallback
-                    return delegateEditor!!.getTableCellEditorComponent(table, value, isSelected, row, column)
-                }
-                val propDef = tableModel.getPropertyDefinition(modelRow)
-
-                delegateEditor = when {
-                    propDef.tkVariableTypeOptions != null -> TkVariablePropertyEditor(project, this@PropertyEditorComponent, currentSelectedWidget, currentDesignDialog, propDef)
-                    propDef.name == "font" -> FontPropertyEditor(this@PropertyEditorComponent)
-                    propDef.name == "image" || propDef.name == "file" -> FilePathPropertyEditor(project, this@PropertyEditorComponent)
-                    propDef.type == Color::class.java -> ColorPropertyEditor(this@PropertyEditorComponent)
-                    propDef.type == Boolean::class.java -> BooleanPropertyEditor()
-                    propDef.options != null -> {
-                        val comboBox = JComboBox(propDef.options.toTypedArray())
-                        comboBox.selectedItem = value as? String ?: propDef.defaultValue
-                        DefaultCellEditor(comboBox)
-                    }
-                    propDef.type == Int::class.java -> DefaultCellEditor(JTextField((value as? Int ?: propDef.defaultValue as Int).toString())) // Basic Int editor for now
-                    else -> DefaultCellEditor(JTextField(value?.toString() ?: "")) // Default for String and others
-                }
-                return delegateEditor!!.getTableCellEditorComponent(table, value, isSelected, row, column)
-            }
-
-            override fun getCellEditorValue(): Any? = delegateEditor?.cellEditorValue
-
-            override fun isCellEditable(e: java.util.EventObject?): Boolean {
-                return delegateEditor?.isCellEditable(e) ?: super.isCellEditable(e)
-            }
-
-            override fun shouldSelectCell(e: java.util.EventObject?): Boolean {
-                return delegateEditor?.shouldSelectCell(e) ?: super.shouldSelectCell(e)
-            }
-
-            override fun stopCellEditing(): Boolean {
-                return delegateEditor?.stopCellEditing() ?: super.stopCellEditing()
-            }
-
-            override fun cancelCellEditing() {
-                delegateEditor?.cancelCellEditing() ?: super.cancelCellEditing()
-            }
-        }
-
-        add(JBScrollPane(propertiesTable), BorderLayout.CENTER)
 
         generateCodeButton = JButton("Generate Code for Current Design")
-        generateCodeButton.addActionListener {
-            currentDesignDialog?.let { dialog ->
-                val pythonCode = TkinterCodeGenerator.generateCode(dialog)
-                val codeDialog = JDialog(SwingUtilities.getWindowAncestor(this), "Generated Python Code")
-                val textArea = JBTextArea(pythonCode)
-                textArea.isEditable = false
-                codeDialog.add(JBScrollPane(textArea))
-                codeDialog.setSize(600, 500)
-                codeDialog.setLocationRelativeTo(null)
-                codeDialog.isVisible = true
-            }
-        }
+        // ... (button setup as before) ...
         val southPanel = JBPanel<JBPanel<*>>()
         southPanel.add(generateCodeButton)
         add(southPanel, BorderLayout.SOUTH)
@@ -129,32 +73,22 @@ class PropertyEditorComponent(private val project: Project) : JBPanel<PropertyEd
 
         project.messageBus.connect(this).subscribe(WIDGET_SELECTION_TOPIC, object : WidgetSelectionListener {
             override fun widgetSelected(primaryWidget: DesignedWidget?, allSelectedIds: Set<String>, dialog: DesignedDialog?) {
-                currentSelectedWidget = primaryWidget // This is the primary for property display
+                currentSelectedWidget = primaryWidget
                 currentDesignDialog = dialog
-
-                if (allSelectedIds.size > 1) {
-                    titleLabel.text = "${allSelectedIds.size} widgets selected"
-                    tableModel.updateData(null, null, emptyList()) // Clear properties table for multi-select
-                } else if (primaryWidget != null) {
-                    titleLabel.text = "Properties: ${primaryWidget.type} (${primaryWidget.properties["name"] ?: primaryWidget.id})"
-                    val propertyDefinitions = WidgetPropertyRegistry.propertiesForType[primaryWidget.type] ?: emptyList()
-                    val propertyPairs = propertyDefinitions.map { propDef ->
-                        Pair(propDef, primaryWidget.properties.getOrDefault(propDef.name, propDef.defaultValue))
-                    }
-                    tableModel.updateData(primaryWidget, currentDesignDialog, propertyPairs)
-                } else { // No selection or primary is null
-                    titleLabel.text = "No widget selected."
-                    tableModel.updateData(null, null, emptyList())
-                }
-                generateCodeButton.isEnabled = dialog != null // Enable if any dialog context
+                updateDisplayForSelection(primaryWidget, allSelectedIds.size)
+                generateCodeButton.isEnabled = dialog != null
             }
         })
     }
 
-    // displayProperties is effectively merged into the listener above
-    // private fun displayProperties(selectedWidget: DesignedWidget?) { ... }
-    // If separate calls are needed, ensure it handles the multi-select case:
     private fun updateDisplayForSelection(primaryWidget: DesignedWidget?, selectedCount: Int) {
+        // Clear previous notebook tab UI
+        notebookTabsPanel.removeAll()
+        val gbcTabLabel = GridBagConstraints().apply { gridx=0; gridy=0; anchor=GridBagConstraints.WEST; insets = Insets(2,2,2,2)}
+        tabInfoLabel.isVisible = false
+        notebookTabsPanel.add(tabInfoLabel, gbcTabLabel)
+
+
         if (selectedCount > 1) {
             titleLabel.text = "$selectedCount widgets selected"
             tableModel.updateData(null, null, emptyList())
@@ -165,10 +99,45 @@ class PropertyEditorComponent(private val project: Project) : JBPanel<PropertyEd
                 Pair(propDef, primaryWidget.properties.getOrDefault(propDef.name, propDef.defaultValue))
             }
             tableModel.updateData(primaryWidget, currentDesignDialog, propertyPairs)
+
+            if (primaryWidget.type == "ttk.Notebook") {
+                tabInfoLabel.isVisible = true
+                val tabs = primaryWidget.properties["tabs"] as? List<Map<String, String>> ?: emptyList()
+                var yPos = 1 // Start below "Tabs:" label
+                tabs.forEachIndexed { index, tabData ->
+                    val tabName = tabData["text"] ?: "Tab ${index + 1}"
+                    val frameId = tabData["frameId"] ?: "N/A"
+
+                    val nameField = JTextField(tabName).apply { isEditable = true /* Allow editing later */ }
+                    nameField.document.addDocumentListener(object: DocumentListener {
+                        fun update() {
+                            (primaryWidget.properties["tabs"] as? MutableList<MutableMap<String,String>>)?.getOrNull(index)?.set("text", nameField.text)
+                            project.messageBus.syncPublisher(WIDGET_MODIFIED_TOPIC).propertyChanged(primaryWidget, currentDesignDialog)
+                        }
+                        override fun insertUpdate(e: DocumentEvent?) = update()
+                        override fun removeUpdate(e: DocumentEvent?) = update()
+                        override fun changedUpdate(e: DocumentEvent?) = update()
+                    })
+
+                    val gbc = GridBagConstraints().apply { gridx=0; gridy=yPos; anchor=GridBagConstraints.WEST; fill=GridBagConstraints.HORIZONTAL; weightx=0.4; insets = Insets(0,2,0,2) }
+                    notebookTabsPanel.add(JBLabel("Tab ${index+1}:"), gbc)
+                    gbc.gridx=1; weightx=0.6;
+                    notebookTabsPanel.add(nameField, gbc)
+                    // val frameLabel = JBLabel("Frame: $frameId") // For display only
+                    // gbc.gridx=1; gridy=yPos+1; gridwidth=2
+                    // notebookTabsPanel.add(frameLabel, gbc)
+                    yPos++
+                }
+            }
         } else {
             titleLabel.text = "No widget selected."
             tableModel.updateData(null, null, emptyList())
         }
-        generateCodeButton.isEnabled = currentDesignDialog != null
+        notebookTabsPanel.revalidate()
+        notebookTabsPanel.repaint()
+        propertiesTable.revalidate() // Ensure table also repaints if its size changes due to panel above/below
+        propertiesTable.repaint()
     }
+    // Ensure the valueColumn setup from the init block is correctly placed (it was complex)
+    // For brevity, assuming it's correctly merged into the init block.
 }

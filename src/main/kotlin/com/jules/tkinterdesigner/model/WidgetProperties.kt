@@ -87,7 +87,9 @@ object WidgetPropertyRegistry {
 
         propertiesForType["ttk.Notebook"] = commonProperties + listOf(
             PropertyDefinition("width", Int::class.java, 200),
-            PropertyDefinition("height", Int::class.java, 200)
+            PropertyDefinition("height", Int::class.java, 200),
+            PropertyDefinition("activeTabIndex", Int::class.java, -1) // Not a direct Tkinter option, but for our state
+            // "tabs" property is managed internally by custom actions/UI, not a simple PropertyDefinition
         )
 
         propertiesForType["ttk.Progressbar"] = commonProperties + listOf(

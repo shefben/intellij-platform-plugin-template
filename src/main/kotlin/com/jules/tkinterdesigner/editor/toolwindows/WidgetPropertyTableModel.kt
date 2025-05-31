@@ -25,41 +25,57 @@ class WidgetPropertyTableModel(
         val (propDef, currentValue) = widgetProperties[rowIndex]
         return if (columnIndex == 0) {
             propDef.name
-        } else {
-            // If the type is Color and value is String, try to parse it.
-            // This helps bridge storage as String and editing as Color.
-            if (propDef.type == Color::class.java && currentValue is String) {
-                try {
-                    // Basic color name parsing or hex
-                    if (currentValue.startsWith("#")) Color.decode(currentValue) else Color.getColor(currentValue, Color.LIGHT_GRAY)
-                } catch (e: Exception) {
-                    Color.LIGHT_GRAY // Fallback
+        } else { // Value column
+            val stringValue = currentValue as? String // All properties are stored as strings
+            when (propDef.type) {
+                String::class.java -> stringValue ?: propDef.defaultValue
+                Int::class.java -> stringValue?.toIntOrNull() ?: propDef.defaultValue
+                Boolean::class.java -> stringValue?.toBooleanStrictOrNull() ?: propDef.defaultValue
+                Color::class.java -> {
+                    if (stringValue != null) {
+                        try {
+                            if (stringValue.startsWith("#")) Color.decode(stringValue)
+                            else Color.getColor(stringValue, Color.LIGHT_GRAY) // This might not work as expected for all names
+                        } catch (e: Exception) { propDef.defaultValue as Color }
+                    } else { propDef.defaultValue as Color }
                 }
-            } else {
-                currentValue
+                else -> stringValue // For other types, display the string value directly
             }
         }
     }
 
     override fun isCellEditable(rowIndex: Int, columnIndex: Int): Boolean {
-        return columnIndex == 1 // Only value column is editable
+        return columnIndex == 1
     }
 
     override fun setValueAt(aValue: Any?, rowIndex: Int, columnIndex: Int) {
         if (columnIndex == 1 && currentWidget != null) {
             val (propDef, _) = widgetProperties[rowIndex]
-            var valueToStore = aValue
 
-            // If the property is a Color, store its string representation (e.g., hex)
-            if (propDef.type == Color::class.java && aValue is Color) {
-                valueToStore = String.format("#%02x%02x%02x", aValue.red, aValue.green, aValue.blue)
+            val valueToStore: String = when {
+                propDef.type == Color::class.java && aValue is Color -> String.format("#%02x%02x%02x", aValue.red, aValue.green, aValue.blue)
+                propDef.type == Boolean::class.java && aValue is Boolean -> aValue.toString() // "true" or "false"
+                propDef.type == Int::class.java && aValue is Int -> aValue.toString()
+                // For TkVariable editor, aValue is already the string (var name)
+                // For Font editor, aValue is already the string
+                // For FilePath editor, aValue is already the string
+                aValue != null -> aValue.toString()
+                else -> propDef.defaultValue.toString() // Fallback to default value as string
             }
 
-            currentWidget!!.properties[propDef.name] = valueToStore ?: propDef.defaultValue
+            currentWidget!!.properties[propDef.name] = valueToStore
 
-            // Update the list in the model directly too (or re-fetch)
+            // Update the local cache in table model
+            val updatedPairValue = when (propDef.type) {
+                 String::class.java -> valueToStore
+                 Int::class.java -> valueToStore.toIntOrNull() ?: propDef.defaultValue
+                 Boolean::class.java -> valueToStore.toBooleanStrictOrNull() ?: propDef.defaultValue
+                 Color::class.java -> if (valueToStore.startsWith("#")) Color.decode(valueToStore) else Color.getColor(valueToStore, propDef.defaultValue as Color)
+                 else -> valueToStore
+            }
+
             widgetProperties = widgetProperties.mapIndexed { index, pair ->
-                if (index == rowIndex) Pair(propDef, valueToStore ?: propDef.defaultValue) else pair
+                if (index == rowIndex) Pair(propDef, updatedPairValue) else pair
             }
 
             project.messageBus.syncPublisher(WIDGET_MODIFIED_TOPIC).propertyChanged(currentWidget!!, currentDialog)
