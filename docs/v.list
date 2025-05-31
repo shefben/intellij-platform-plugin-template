@@ -1,0 +1,42 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Copyright 2000-2025 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license. -->
+
+<!DOCTYPE vars
+        SYSTEM "https://resources.jetbrains.com/writerside/1.0/vars.dtd">
+
+<vars>
+
+  <var name="ijPlatform" value="2025.1.1.1"/>
+  <var name="ijPlatformBuild" value="251.25410.129"/>
+
+
+  <!-- Links to branches **MUST** have "-master" suffix for recheck when running inspection globally -->
+
+  <var name="gh-sdk-samples-master" value="https://github.com/JetBrains/intellij-sdk-code-samples/tree/main"/>
+
+  <var name="gh-ic" value="https://github.com/JetBrains/intellij-community/tree/idea/%ijPlatformBuild%"/>
+  <var name="gh-ic-master" value="https://github.com/JetBrains/intellij-community/tree/master"/>
+  <var name="gh-ic-242-master" value="https://github.com/JetBrains/intellij-community/tree/242"/>
+  <var name="gh-ic-223-master" value="https://github.com/JetBrains/intellij-community/tree/223"/>
+
+  <var name="gh-ij-android" value="https://github.com/JetBrains/android/tree/idea/%ijPlatformBuild%"/>
+
+  <var name="gh-ij-plugins" value="https://github.com/JetBrains/intellij-plugins/tree/idea/%ijPlatformBuild%"/>
+  <var name="gh-ij-plugins-master" value="https://github.com/JetBrains/intellij-plugins/tree/master"/>
+
+  <var name="gh-jcef-master" value="https://github.com/JetBrains/jcef/tree/master/java"/>
+  <var name="gh-java-annotations" value="https://github.com/JetBrains/java-annotations/tree/24.0.0"/>
+
+  <var name="intellij-platform-gradle-plugin-version" value="2.6.0"/>
+  <var name="gh-ijpgp" value="https://github.com/JetBrains/intellij-platform-gradle-plugin/tree/%intellij-platform-gradle-plugin-version%"/>
+  <var name="gh-ijpgp-master" value="https://github.com/JetBrains/intellij-platform-gradle-plugin/tree/main"/>
+
+  <var name="plugin-verifier-version" value="1.386"/>
+  <var name="gh-pv" value="https://github.com/JetBrains/intellij-plugin-verifier/tree/%plugin-verifier-version%"/>
+  <var name="gh-pv-master" value="https://github.com/JetBrains/intellij-plugin-verifier/tree/master"/>
+
+  <var name="gradle-intellij-plugin-version" value="1.17.4"/>
+  <var name="gradle-grammar-kit-plugin-version" value="2022.3.2.2"/>
+  <var name="marketplace-zip-signer-version" value="0.1.38"/>
+
+</vars>

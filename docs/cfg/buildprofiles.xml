@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!-- Copyright 2000-2024 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license. -->
+<buildprofiles xsi:noNamespaceSchemaLocation="https://resources.jetbrains.com/writerside/1.0/build-profiles.xsd"
+               xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
+    <variables>
+        <header-logo>https://resources.jetbrains.com/storage/logos/web/jetbrains/jetbrains-particle.svg</header-logo>
+        <web-root>https://plugins.jetbrains.com/docs</web-root>
+        <product-web-url>https://plugins.jetbrains.com/docs/intellij/welcome.html</product-web-url>
+        <search-scope/>
+        <fallback-url/>
+        <download-page>https://jb.gg/ipe</download-page>
+        <download-title>IntelliJ Platform Explorer</download-title>
+        <showDownloadButton>true</showDownloadButton>
+        <generate-sitemap-url-prefix>https://plugins.jetbrains.com/docs/intellij/</generate-sitemap-url-prefix>
+        <feedbackRequireEmail>false</feedbackRequireEmail>
+        <feedback-url>https://forms-service.jetbrains.com/feedback</feedback-url>
+        <feedback-widget>true</feedback-widget>
+        <webmaster>https://plugins.jetbrains.com/docs/intellij/getting-help.html</webmaster>
+        <feedback-support>https://www.jetbrains.com/support/</feedback-support>
+        <sideblocks>true</sideblocks>
+        <config-search-scopes-provider>https://data.services.jetbrains.com/search/</config-search-scopes-provider>
+        <og-twitter>@JBPlatform</og-twitter>
+        <og-image>https://resources.jetbrains.com/storage/products/jetbrains/img/meta/preview.png</og-image>
+        <enable-browser-edits>true</enable-browser-edits>
+        <browser-edits-url>https://github.com/JetBrains/intellij-sdk-docs/edit/main/</browser-edits-url>
+        <images-prefix-override>images/</images-prefix-override>
+        <noindex-content status="deprecated">false</noindex-content>
+        <noindex-content status="eap">false</noindex-content>
+        <noindex-content status="release">false</noindex-content>
+
+        <algolia-id>JWPLKSKZVF</algolia-id>
+        <algolia-index>prod_INTELLIJ-SDK-DOCS_HELP</algolia-index>
+        <algolia-api-key>bce9ba6ce7419efe813d671244d3bf6a</algolia-api-key>
+        <algolia-product-id>intellij</algolia-product-id>
+        <algolia-product-version></algolia-product-version>
+
+        <analytics-head-script-file>google-analytics-code.html</analytics-head-script-file>
+        <analytics-body-html-file>google-analytics-noscript.html</analytics-body-html-file>
+
+        <automaticLinkSummaries>false</automaticLinkSummaries>
+        <resizable-sidebar>true</resizable-sidebar>
+    </variables>
+
+    <build-profile instance="ijs"/>
+
+    <sitemap/>
+
+    <footer>
+        <copyright>2000-2025 JetBrains s.r.o. and contributors. Use of this source code is governed by the Apache 2.0 license.</copyright>
+        <social type="bluesky" href="https://bsky.app/profile/platform.jetbrains.com"/>
+        <social type="twitter" href="https://x.com/JBPlatform/"/>
+        <social type="blog" href="https://blog.jetbrains.com/platform/"/>
+        <social type="youtube" href="https://www.youtube.com/playlist?list=PLQ176FUIyIUZRWGCFY7G9V5zaM00THymY"/>
+        <social type="linkedin" href="https://www.linkedin.com/showcase/jetbrains-marketplace"/>
+
+        <link href="https://platform.jetbrains.com">JetBrains Platform Forum</link>
+        <link href="https://jb.gg/ipe">IntelliJ Platform Explorer</link>
+        <link href="https://plugins.jetbrains.com/plugin-ideas/">Plugin Ideas</link>
+    </footer>
+</buildprofiles>
