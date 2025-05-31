@@ -9,7 +9,19 @@
     <resource-bundle>messages.TkinterDesignerBundle</resource-bundle>
 
     <extensions defaultExtensionNs="com.intellij">
-        <toolWindow factoryClass="com.jules.tkinterdesigner.toolWindow.TkinterDesignerToolWindowFactory" id="TkinterDesignerWindow"/>
+        <fileType name="TkinterDesign" implementationClass="com.jules.tkinterdesigner.filetype.TkinterDesignFileType" fieldName="INSTANCE" extensions="tkdesign"/>
+        <fileEditorProvider implementation="com.jules.tkinterdesigner.editor.TkinterDesignerFileEditorProvider"/>
+
+        <toolWindow id="TkinterDesigner.WidgetPalette"
+                    anchor="left"
+                    secondary="true"
+                    canCloseContents="true"
+                    factoryClass="com.jules.tkinterdesigner.editor.toolwindows.WidgetPaletteToolWindowFactory"/>
+        <toolWindow id="TkinterDesigner.PropertyEditor"
+                    anchor="right"
+                    secondary="true"
+                    canCloseContents="true"
+                    factoryClass="com.jules.tkinterdesigner.editor.toolwindows.PropertyEditorToolWindowFactory"/>
     </extensions>
 
     <actions>

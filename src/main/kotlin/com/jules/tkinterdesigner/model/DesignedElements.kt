@@ -7,7 +7,8 @@ data class DesignedWidget(
     var y: Int,
     var width: Int,
     var height: Int,
-    var properties: MutableMap<String, Any> = mutableMapOf()
+    var properties: MutableMap<String, Any> = mutableMapOf(),
+    var parentId: String? = null // Added for parenting
 )
 
 data class DesignedDialog(
@@ -20,6 +21,11 @@ data class DesignedDialog(
 object WidgetPaletteInfo {
     val WIDGETS = listOf(
         "ttk.Button", "ttk.Label", "ttk.Entry", "ttk.Frame",
-        "Button", "Label", "Entry", "Frame" // Classic Tk for comparison
-    )
+        "Button", "Label", "Entry", "Frame", // Classic Tk for comparison
+        "ttk.Notebook", "ttk.Progressbar", "ttk.Separator",
+        "Canvas", "Text", "Scrollbar" // tk.Scrollbar
+    ).distinct() // Ensure no duplicates if manually adding more later
 }
+
+// UserData key for storing DesignedDialog in VirtualFile
+val DESIGNED_DIALOG_KEY = com.intellij.openapi.util.Key.create<DesignedDialog>("com.jules.tkinterdesigner.designedDialog")
