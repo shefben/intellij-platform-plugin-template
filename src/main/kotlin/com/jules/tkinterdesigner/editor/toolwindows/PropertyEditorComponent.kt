@@ -72,6 +72,7 @@ class PropertyEditorComponent(private val project: Project) : JBPanel<PropertyEd
                 val propDef = tableModel.getPropertyDefinition(modelRow)
 
                 delegateEditor = when {
+                    propDef.tkVariableTypeOptions != null -> TkVariablePropertyEditor(project, this@PropertyEditorComponent, currentSelectedWidget, currentDesignDialog, propDef)
                     propDef.name == "font" -> FontPropertyEditor(this@PropertyEditorComponent)
                     propDef.name == "image" || propDef.name == "file" -> FilePathPropertyEditor(project, this@PropertyEditorComponent)
                     propDef.type == Color::class.java -> ColorPropertyEditor(this@PropertyEditorComponent)
