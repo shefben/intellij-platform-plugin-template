@@ -19,10 +19,9 @@ object TkinterDesignFileType : FileType {
         return null
     }
 
-    override fun isBinary(): Boolean = true // Treat as binary for now; content will be in memory
+    override fun isBinary(): Boolean = false // It's a JSON text file
 
     override fun isReadOnly(): Boolean = false
 
-    // For binary types, charset is usually not applicable or managed differently
-    override fun getCharset(file: VirtualFile, content: ByteArray): String? = null
+    override fun getCharset(file: VirtualFile, content: ByteArray): String = Charsets.UTF_8.name()
 }

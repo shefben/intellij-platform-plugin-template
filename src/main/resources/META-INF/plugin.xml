@@ -12,6 +12,8 @@
         <fileType name="TkinterDesign" implementationClass="com.jules.tkinterdesigner.filetype.TkinterDesignFileType" fieldName="INSTANCE" extensions="tkdesign"/>
         <fileEditorProvider implementation="com.jules.tkinterdesigner.editor.TkinterDesignerFileEditorProvider"/>
 
+        <notificationGroup id="TkinterDesigner" displayType="BALLOON" />
+
         <toolWindow id="TkinterDesigner.WidgetPalette"
                     anchor="left"
                     secondary="true"
