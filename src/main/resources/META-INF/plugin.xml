@@ -9,7 +9,6 @@
     <resource-bundle>messages.MyBundle</resource-bundle>
 
     <extensions defaultExtensionNs="com.intellij">
-        <toolWindow factoryClass="org.jetbrains.plugins.template.toolWindow.MyToolWindowFactory" id="MyToolWindow"/>
         <toolWindow factoryClass="org.jetbrains.plugins.template.tkdesigner.TkinterDesignerToolWindowFactory" id="TkinterDesigner" anchor="right"/>
         <diffTool implementation="org.jetbrains.plugins.template.tkdesigner.TkdesignDiffTool"/>
         <postStartupActivity implementation="org.jetbrains.plugins.template.startup.MyProjectActivity" />
