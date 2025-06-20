@@ -82,15 +82,22 @@ class DesignAreaPanel(var model: DialogModel, private val project: DesignProject
             g.drawLine(0, it, width, it)
         }
 
-        // Draw resize handles for selected widgets
+        // Draw resize handles for selected widgets or the dialog itself
         g.color = Color.BLUE
         val size = 6
-        selectedWidgets.forEach { dw ->
-            val r = dw.component.bounds
-            g.fillRect(r.x - size / 2, r.y - size / 2, size, size)
-            g.fillRect(r.x + r.width - size / 2, r.y - size / 2, size, size)
-            g.fillRect(r.x - size / 2, r.y + r.height - size / 2, size, size)
-            g.fillRect(r.x + r.width - size / 2, r.y + r.height - size / 2, size, size)
+        if (selectedWidgets.isEmpty()) {
+            g.fillRect(-size / 2, -size / 2, size, size)
+            g.fillRect(width - size / 2, -size / 2, size, size)
+            g.fillRect(-size / 2, height - size / 2, size, size)
+            g.fillRect(width - size / 2, height - size / 2, size, size)
+        } else {
+            selectedWidgets.forEach { dw ->
+                val r = dw.component.bounds
+                g.fillRect(r.x - size / 2, r.y - size / 2, size, size)
+                g.fillRect(r.x + r.width - size / 2, r.y - size / 2, size, size)
+                g.fillRect(r.x - size / 2, r.y + r.height - size / 2, size, size)
+                g.fillRect(r.x + r.width - size / 2, r.y + r.height - size / 2, size, size)
+            }
         }
     }
 
