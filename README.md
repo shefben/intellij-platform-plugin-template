@@ -515,7 +515,15 @@ You can get that token in your JetBrains Marketplace profile dashboard in the [M
 > [!WARNING]
 > Before using the automated deployment process, it is necessary to manually create a new plugin in JetBrains Marketplace to specify options like the license, repository URL, etc.
 > Please follow the [Publishing a Plugin][docs:publishing] instructions.
+### Building the plugin
 
+To compile the Tkinter designer plugin locally, run the Gradle wrapper with the `buildPlugin` task:
+
+```bash
+./gradlew buildPlugin
+```
+
+On Windows run `gradlew.bat buildPlugin` or the `compilePlugin.bat` script. The plugin archive will be created in `build/distributions`.
 
 ## FAQ
 
