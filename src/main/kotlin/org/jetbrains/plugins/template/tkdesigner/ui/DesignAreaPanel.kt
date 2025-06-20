@@ -81,6 +81,17 @@ class DesignAreaPanel(var model: DialogModel, private val project: DesignProject
             g.color = Color.RED
             g.drawLine(0, it, width, it)
         }
+
+        // Draw resize handles for selected widgets
+        g.color = Color.BLUE
+        val size = 6
+        selectedWidgets.forEach { dw ->
+            val r = dw.component.bounds
+            g.fillRect(r.x - size / 2, r.y - size / 2, size, size)
+            g.fillRect(r.x + r.width - size / 2, r.y - size / 2, size, size)
+            g.fillRect(r.x - size / 2, r.y + r.height - size / 2, size, size)
+            g.fillRect(r.x + r.width - size / 2, r.y + r.height - size / 2, size, size)
+        }
     }
 
     init {
@@ -366,8 +377,24 @@ class DesignAreaPanel(var model: DialogModel, private val project: DesignProject
     private fun installListeners(widget: DesignWidget) {
         val comp = widget.component
         val popup = javax.swing.JPopupMenu().apply {
-            add(javax.swing.JMenuItem("Delete").apply { addActionListener { selectedWidgets.clear(); selectedWidgets.add(widget); deleteSelected() } })
-            add(javax.swing.JMenuItem("Duplicate").apply { addActionListener { selectedWidgets.clear(); selectedWidgets.add(widget); duplicate() } })
+            add(javax.swing.JMenuItem("Delete").apply {
+                addActionListener {
+                    selectedWidgets.clear(); selectedWidgets.add(widget); deleteSelected()
+                }
+            })
+            add(javax.swing.JMenuItem("Duplicate").apply {
+                addActionListener {
+                    selectedWidgets.clear(); selectedWidgets.add(widget); duplicate()
+                }
+            })
+            add(javax.swing.JMenuItem("Copy").apply {
+                addActionListener {
+                    selectedWidgets.clear(); selectedWidgets.add(widget); copySelection()
+                }
+            })
+            add(javax.swing.JMenuItem("Bring to Front").apply { addActionListener { bringToFront(widget) } })
+            add(javax.swing.JMenuItem("Send to Back").apply { addActionListener { sendToBack(widget) } })
+            add(javax.swing.JMenuItem("Group With Selection").apply { addActionListener { if (!selectedWidgets.contains(widget)) selectedWidgets.add(widget); groupSelected() } })
         }
         val listener = object : MouseAdapter() {
             var dragOffsetX = 0
@@ -605,6 +632,28 @@ class DesignAreaPanel(var model: DialogModel, private val project: DesignProject
 
     fun duplicate() {
         copySelection(); paste()
+    }
+
+    fun bringToFront(widget: DesignWidget) {
+        setComponentZOrder(widget.component, 0)
+        designWidgets.remove(widget)
+        designWidgets.add(0, widget)
+        if (widget.model.parent == null) {
+            model.widgets.remove(widget.model)
+            model.widgets.add(0, widget.model)
+        }
+        pushHistory(); repaint()
+    }
+
+    fun sendToBack(widget: DesignWidget) {
+        setComponentZOrder(widget.component, componentCount - 1)
+        designWidgets.remove(widget)
+        designWidgets.add(widget)
+        if (widget.model.parent == null) {
+            model.widgets.remove(widget.model)
+            model.widgets.add(widget.model)
+        }
+        pushHistory(); repaint()
     }
 
     fun groupSelected() {

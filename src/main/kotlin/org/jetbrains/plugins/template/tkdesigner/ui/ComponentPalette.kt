@@ -10,7 +10,8 @@ import javax.swing.JDialog
 class ComponentPalette(private val design: DesignAreaPanel) : JDialog() {
     init {
         title = "Widgets"
-        layout = GridLayout(0, 2, 2, 2)
+        // Use four columns so the palette stays compact
+        layout = GridLayout(0, 4, 2, 2)
         isAlwaysOnTop = true
         isResizable = false
 
