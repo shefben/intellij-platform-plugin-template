@@ -12,11 +12,19 @@
 > Click the <kbd>Use this template</kbd> button and clone it in IntelliJ IDEA.
 
 <!-- Plugin description -->
-**IntelliJ Platform Plugin Template** is a repository that provides a pure template to make it easier to create a new plugin project (check the [Creating a repository from a template][gh:template] article).
-
-The main goal of this template is to speed up the setup phase of plugin development for both new and experienced developers by preconfiguring the project scaffold and CI, linking to the proper documentation pages, and keeping everything organized.
-
-[gh:template]: https://docs.github.com/en/repositories/creating-and-managing-repositories/creating-a-repository-from-a-template
+Visual Tkinter Designer adds a WYSIWYG editor for building Tkinter dialogs inside IntelliJ IDEA 2024.3.
+It provides a design surface with drag and resize support, a floating palette for common widgets
+including menus, menubuttons, paned windows and scrollbars, and a property panel for editing widget
+attributes. Clicking the dialog background reveals dialog properties such as size. Multiple widgets can
+be selected, aligned or grouped inside frames. Designs support undo/redo history, keyboard shortcuts
+and grid snapping with rulers and overlay measurements. Containers may use place, pack or grid geometry
+managers. A hierarchy tree helps select nested widgets while a font/style inspector offers color and
+font pickers. Components snap to guides and can be distributed evenly. Projects may contain several
+dialogs and reference image resources with paths stored relative to the project. Event snippets are available for
+callbacks and you can choose the Python interpreter used for preview. `.tkdesign` files open in a custom diff viewer
+that lists changed widgets and properties. Localization keys may be assigned to text and translations are saved
+alongside the project. You can preview the generated Python or import existing scripts, and save
+work in `.tkdesign` JSON files which can easily be version controlled and recreate the dialog exactly in Tkinter.
 <!-- Plugin description end -->
 
 If you're still not quite sure what this is all about, read our introduction: [What is the IntelliJ Platform?][docs:intro]
@@ -507,7 +515,15 @@ You can get that token in your JetBrains Marketplace profile dashboard in the [M
 > [!WARNING]
 > Before using the automated deployment process, it is necessary to manually create a new plugin in JetBrains Marketplace to specify options like the license, repository URL, etc.
 > Please follow the [Publishing a Plugin][docs:publishing] instructions.
+### Building the plugin
 
+To compile the Tkinter designer plugin locally, run the Gradle wrapper with the `buildPlugin` task:
+
+```bash
+./gradlew buildPlugin
+```
+
+On Windows run `gradlew.bat buildPlugin` or the `compilePlugin.bat` script. The plugin archive will be created in `build/distributions`.
 
 ## FAQ
 
