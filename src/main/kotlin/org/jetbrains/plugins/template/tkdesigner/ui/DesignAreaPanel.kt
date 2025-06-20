@@ -7,11 +7,15 @@ import java.awt.event.MouseAdapter
 import java.awt.event.MouseEvent
 import javax.swing.JComponent
 import javax.swing.JLayeredPane
+import org.jetbrains.plugins.template.tkdesigner.model.DesignProject
+
+private enum class ResizeMode { NONE, N, S, E, W, NE, NW, SE, SW }
 
 /**
  * Panel used as design surface for Tkinter dialogs.
  */
-class DesignAreaPanel(var model: DialogModel) : JLayeredPane() {
+
+class DesignAreaPanel(var model: DialogModel, private val project: DesignProject? = null) : JLayeredPane() {
 
     var selectionListener: ((WidgetModel?) -> Unit)? = null
     var dialogListener: ((DialogModel) -> Unit)? = null
@@ -33,6 +37,10 @@ class DesignAreaPanel(var model: DialogModel) : JLayeredPane() {
     private var overlay: String? = null
     private var guideX: Int? = null
     private var guideY: Int? = null
+
+    private var dialogResize: ResizeMode = ResizeMode.NONE
+    private var dialogDragStartX = 0
+    private var dialogDragStartY = 0
 
     var selected: DesignWidget? = null
         private set
@@ -73,12 +81,31 @@ class DesignAreaPanel(var model: DialogModel) : JLayeredPane() {
             g.color = Color.RED
             g.drawLine(0, it, width, it)
         }
+
+        // Draw resize handles for selected widgets or the dialog itself
+        g.color = Color.BLUE
+        val size = 6
+        if (selectedWidgets.isEmpty()) {
+            g.fillRect(-size / 2, -size / 2, size, size)
+            g.fillRect(width - size / 2, -size / 2, size, size)
+            g.fillRect(-size / 2, height - size / 2, size, size)
+            g.fillRect(width - size / 2, height - size / 2, size, size)
+        } else {
+            selectedWidgets.forEach { dw ->
+                val r = dw.component.bounds
+                g.fillRect(r.x - size / 2, r.y - size / 2, size, size)
+                g.fillRect(r.x + r.width - size / 2, r.y - size / 2, size, size)
+                g.fillRect(r.x - size / 2, r.y + r.height - size / 2, size, size)
+                g.fillRect(r.x + r.width - size / 2, r.y + r.height - size / 2, size, size)
+            }
+        }
     }
 
     init {
         layout = null
         background = Color.WHITE
         preferredSize = Dimension(model.width, model.height)
+        border = javax.swing.BorderFactory.createLineBorder(Color.DARK_GRAY)
         isOpaque = true
         addMouseListener(object : MouseAdapter() {
             override fun mousePressed(e: MouseEvent) {
@@ -109,9 +136,17 @@ class DesignAreaPanel(var model: DialogModel) : JLayeredPane() {
                         overlay = null
                     } else {
                         selectedWidgets.clear();
-                        selected = null
-                        selectionListener?.invoke(null)
-                        dialogListener?.invoke(model)
+                        val edge = detectDialogEdge(e)
+                        if (edge != ResizeMode.NONE) {
+                            dialogResize = edge
+                            dialogDragStartX = e.x
+                            dialogDragStartY = e.y
+                            cursor = cursorFor(edge)
+                        } else {
+                            selected = null
+                            selectionListener?.invoke(null)
+                            dialogListener?.invoke(model)
+                        }
                     }
                 }
             }
@@ -129,6 +164,11 @@ class DesignAreaPanel(var model: DialogModel) : JLayeredPane() {
                     overlay = null
                     guideX = null
                     guideY = null
+                }
+                if (dialogResize != ResizeMode.NONE) {
+                    pushHistory()
+                    dialogResize = ResizeMode.NONE
+                    cursor = Cursor.getDefaultCursor()
                 }
             }
         })
@@ -158,6 +198,31 @@ class DesignAreaPanel(var model: DialogModel) : JLayeredPane() {
                     overlay = "${nw}x$nh"
                     repaint()
                 }
+                if (dialogResize != ResizeMode.NONE) {
+                    val dx = e.x - dialogDragStartX
+                    val dy = e.y - dialogDragStartY
+                    var newW = model.width
+                    var newH = model.height
+                    when (dialogResize) {
+                        ResizeMode.E, ResizeMode.NE, ResizeMode.SE -> newW = snap(model.width + dx)
+                        ResizeMode.S, ResizeMode.SE, ResizeMode.SW -> newH = snap(model.height + dy)
+                        ResizeMode.W, ResizeMode.NW, ResizeMode.SW -> newW = snap(model.width - dx)
+                        ResizeMode.N, ResizeMode.NE, ResizeMode.NW -> newH = snap(model.height - dy)
+                        else -> {}
+                    }
+                    model.width = maxOf(50, newW)
+                    model.height = maxOf(50, newH)
+                    preferredSize = Dimension(model.width, model.height)
+                    revalidate(); repaint()
+                    overlay = "${model.width}x${model.height}"
+                }
+            }
+
+            override fun mouseMoved(e: MouseEvent) {
+                if (dialogResize == ResizeMode.NONE && pendingAddType == null) {
+                    val mode = detectDialogEdge(e)
+                    cursor = cursorFor(mode)
+                }
             }
         })
 
@@ -168,11 +233,13 @@ class DesignAreaPanel(var model: DialogModel) : JLayeredPane() {
         im.put(javax.swing.KeyStroke.getKeyStroke("control C"), "copy")
         im.put(javax.swing.KeyStroke.getKeyStroke("control V"), "paste")
         im.put(javax.swing.KeyStroke.getKeyStroke("control D"), "dup")
+        im.put(javax.swing.KeyStroke.getKeyStroke("DELETE"), "del")
         am.put("undo", object : javax.swing.AbstractAction() { override fun actionPerformed(e: java.awt.event.ActionEvent?) { undo() } })
         am.put("redo", object : javax.swing.AbstractAction() { override fun actionPerformed(e: java.awt.event.ActionEvent?) { redo() } })
         am.put("copy", object : javax.swing.AbstractAction() { override fun actionPerformed(e: java.awt.event.ActionEvent?) { copySelection() } })
         am.put("paste", object : javax.swing.AbstractAction() { override fun actionPerformed(e: java.awt.event.ActionEvent?) { paste() } })
         am.put("dup", object : javax.swing.AbstractAction() { override fun actionPerformed(e: java.awt.event.ActionEvent?) { duplicate() } })
+        am.put("del", object : javax.swing.AbstractAction() { override fun actionPerformed(e: java.awt.event.ActionEvent?) { deleteSelected() } })
     }
 
     fun beginAddWidget(type: String) {
@@ -272,7 +339,7 @@ class DesignAreaPanel(var model: DialogModel) : JLayeredPane() {
         }
     }
 
-    private fun createComponent(model: WidgetModel): JComponent = when (model.type) {
+    private fun createComponent(model: WidgetModel): JComponent = when (val t = resolveBaseType(model.type)) {
         "Button" -> javax.swing.JButton(model.properties["text"] ?: "Button")
         "Label" -> javax.swing.JLabel(model.properties["text"] ?: "Label")
         "Entry" -> javax.swing.JTextField()
@@ -284,15 +351,62 @@ class DesignAreaPanel(var model: DialogModel) : JLayeredPane() {
         "Listbox" -> javax.swing.JList<String>()
         "Scale" -> javax.swing.JSlider()
         "Spinbox" -> javax.swing.JSpinner()
-        else -> javax.swing.JPanel()
+        "Menu" -> javax.swing.JMenuBar().apply { add(javax.swing.JMenu("Menu")) }
+        "Menubutton" -> javax.swing.JButton(model.properties["text"] ?: "Menu")
+        "PanedWindow" -> javax.swing.JSplitPane()
+        "Scrollbar" -> javax.swing.JScrollBar()
+        else -> javax.swing.JPanel().apply {
+            border = javax.swing.BorderFactory.createDashedBorder(Color.GRAY)
+            add(javax.swing.JLabel(model.type))
+        }
+    }
+
+    private fun resolveBaseType(type: String): String {
+        val known = setOf("Button", "Label", "Entry", "Text", "Frame", "Canvas", "Checkbutton", "Radiobutton", "Listbox", "Scale", "Spinbox", "Menu", "Menubutton", "PanedWindow", "Scrollbar")
+        if (type in known) return type
+        project?.basePath?.let { base ->
+            val dir = java.io.File(base)
+            if (dir.exists()) {
+                dir.walkTopDown().forEach { file ->
+                    if (file.extension == "py") {
+                        val lines = file.readLines()
+                        lines.forEach { line ->
+                            val m = Regex("class\\s+$type\\((\\w+)\\)").find(line.trim())
+                            if (m != null) return m.groupValues[1]
+                        }
+                    }
+                }
+            }
+        }
+        return type
     }
 
     private fun installListeners(widget: DesignWidget) {
         val comp = widget.component
+        val popup = javax.swing.JPopupMenu().apply {
+            add(javax.swing.JMenuItem("Delete").apply {
+                addActionListener {
+                    selectedWidgets.clear(); selectedWidgets.add(widget); deleteSelected()
+                }
+            })
+            add(javax.swing.JMenuItem("Duplicate").apply {
+                addActionListener {
+                    selectedWidgets.clear(); selectedWidgets.add(widget); duplicate()
+                }
+            })
+            add(javax.swing.JMenuItem("Copy").apply {
+                addActionListener {
+                    selectedWidgets.clear(); selectedWidgets.add(widget); copySelection()
+                }
+            })
+            add(javax.swing.JMenuItem("Bring to Front").apply { addActionListener { bringToFront(widget) } })
+            add(javax.swing.JMenuItem("Send to Back").apply { addActionListener { sendToBack(widget) } })
+            add(javax.swing.JMenuItem("Group With Selection").apply { addActionListener { if (!selectedWidgets.contains(widget)) selectedWidgets.add(widget); groupSelected() } })
+        }
         val listener = object : MouseAdapter() {
             var dragOffsetX = 0
             var dragOffsetY = 0
-            var resizing = false
+            var resizeMode: ResizeMode = ResizeMode.NONE
 
             override fun mousePressed(e: MouseEvent) {
                 if (!e.isShiftDown) selectedWidgets.clear()
@@ -301,22 +415,61 @@ class DesignAreaPanel(var model: DialogModel) : JLayeredPane() {
                 selectionListener?.invoke(widget.model)
                 dragOffsetX = e.x
                 dragOffsetY = e.y
-                resizing = e.x >= comp.width - 10 && e.y >= comp.height - 10
+                val inLeft = e.x <= 5
+                val inRight = e.x >= comp.width - 5
+                val inTop = e.y <= 5
+                val inBottom = e.y >= comp.height - 5
+                resizeMode = when {
+                    inLeft && inTop -> ResizeMode.NW
+                    inRight && inTop -> ResizeMode.NE
+                    inLeft && inBottom -> ResizeMode.SW
+                    inRight && inBottom -> ResizeMode.SE
+                    inLeft -> ResizeMode.W
+                    inRight -> ResizeMode.E
+                    inTop -> ResizeMode.N
+                    inBottom -> ResizeMode.S
+                    else -> ResizeMode.NONE
+                }
+                comp.cursor = when (resizeMode) {
+                    ResizeMode.N -> Cursor.getPredefinedCursor(Cursor.N_RESIZE_CURSOR)
+                    ResizeMode.S -> Cursor.getPredefinedCursor(Cursor.S_RESIZE_CURSOR)
+                    ResizeMode.E -> Cursor.getPredefinedCursor(Cursor.E_RESIZE_CURSOR)
+                    ResizeMode.W -> Cursor.getPredefinedCursor(Cursor.W_RESIZE_CURSOR)
+                    ResizeMode.NE -> Cursor.getPredefinedCursor(Cursor.NE_RESIZE_CURSOR)
+                    ResizeMode.NW -> Cursor.getPredefinedCursor(Cursor.NW_RESIZE_CURSOR)
+                    ResizeMode.SE -> Cursor.getPredefinedCursor(Cursor.SE_RESIZE_CURSOR)
+                    ResizeMode.SW -> Cursor.getPredefinedCursor(Cursor.SW_RESIZE_CURSOR)
+                    else -> Cursor.getDefaultCursor()
+                }
                 dragInitial = selectedWidgets.associateWith { it.component.bounds }
                 overlay = null
             }
 
             override fun mouseDragged(e: MouseEvent) {
-                if (resizing) {
+                if (resizeMode != ResizeMode.NONE) {
                     val dx = snap(e.x) - dragOffsetX
                     val dy = snap(e.y) - dragOffsetY
                     selectedWidgets.forEach { w ->
                         val start = dragInitial[w] ?: w.component.bounds
-                        val newW = snap(start.width + dx)
-                        val newH = snap(start.height + dy)
-                        w.component.setSize(newW, newH)
-                        w.model.width = newW
-                        w.model.height = newH
+                        var x = start.x
+                        var y = start.y
+                        var wNew = start.width
+                        var hNew = start.height
+                        when (resizeMode) {
+                            ResizeMode.E, ResizeMode.NE, ResizeMode.SE -> wNew = snap(start.width + dx)
+                            ResizeMode.W, ResizeMode.NW, ResizeMode.SW -> { x = snap(start.x + dx); wNew = snap(start.width - dx) }
+                            else -> {}
+                        }
+                        when (resizeMode) {
+                            ResizeMode.S, ResizeMode.SE, ResizeMode.SW -> hNew = snap(start.height + dy)
+                            ResizeMode.N, ResizeMode.NE, ResizeMode.NW -> { y = snap(start.y + dy); hNew = snap(start.height - dy) }
+                            else -> {}
+                        }
+                        w.component.setBounds(x, y, maxOf(1, wNew), maxOf(1, hNew))
+                        w.model.x = x
+                        w.model.y = y
+                        w.model.width = maxOf(1, wNew)
+                        w.model.height = maxOf(1, hNew)
                     }
                     overlay = "${selected!!.component.width}x${selected!!.component.height}"
                 } else {
@@ -336,10 +489,21 @@ class DesignAreaPanel(var model: DialogModel) : JLayeredPane() {
             }
 
             override fun mouseReleased(e: MouseEvent) {
+                if (e.isPopupTrigger || e.button == MouseEvent.BUTTON3) {
+                    popup.show(comp, e.x, e.y)
+                }
                 pushHistory()
+                resizeMode = ResizeMode.NONE
                 overlay = null
                 guideX = null
                 guideY = null
+                comp.cursor = Cursor.getDefaultCursor()
+            }
+
+            override fun mouseClicked(e: MouseEvent) {
+                if (e.isPopupTrigger || e.button == MouseEvent.BUTTON3) {
+                    popup.show(comp, e.x, e.y)
+                }
             }
         }
         comp.addMouseListener(listener)
@@ -477,6 +641,28 @@ class DesignAreaPanel(var model: DialogModel) : JLayeredPane() {
         copySelection(); paste()
     }
 
+    fun bringToFront(widget: DesignWidget) {
+        setComponentZOrder(widget.component, 0)
+        designWidgets.remove(widget)
+        designWidgets.add(0, widget)
+        if (widget.model.parent == null) {
+            model.widgets.remove(widget.model)
+            model.widgets.add(0, widget.model)
+        }
+        pushHistory(); repaint()
+    }
+
+    fun sendToBack(widget: DesignWidget) {
+        setComponentZOrder(widget.component, componentCount - 1)
+        designWidgets.remove(widget)
+        designWidgets.add(widget)
+        if (widget.model.parent == null) {
+            model.widgets.remove(widget.model)
+            model.widgets.add(widget.model)
+        }
+        pushHistory(); repaint()
+    }
+
     fun groupSelected() {
         if (selectedWidgets.size < 2) return
         val iterator = selectedWidgets.iterator()
@@ -501,6 +687,60 @@ class DesignAreaPanel(var model: DialogModel) : JLayeredPane() {
         selected = groupWidget
         pushHistory()
         repaint()
+    }
+
+    private fun detectDialogEdge(e: MouseEvent): ResizeMode {
+        val margin = 5
+        val left = e.x <= margin
+        val right = e.x >= width - margin
+        val top = e.y <= margin
+        val bottom = e.y >= height - margin
+        return when {
+            left && top -> ResizeMode.NW
+            right && top -> ResizeMode.NE
+            left && bottom -> ResizeMode.SW
+            right && bottom -> ResizeMode.SE
+            left -> ResizeMode.W
+            right -> ResizeMode.E
+            top -> ResizeMode.N
+            bottom -> ResizeMode.S
+            else -> ResizeMode.NONE
+        }
+    }
+
+    private fun cursorFor(mode: ResizeMode): Cursor = when (mode) {
+        ResizeMode.N -> Cursor.getPredefinedCursor(Cursor.N_RESIZE_CURSOR)
+        ResizeMode.S -> Cursor.getPredefinedCursor(Cursor.S_RESIZE_CURSOR)
+        ResizeMode.E -> Cursor.getPredefinedCursor(Cursor.E_RESIZE_CURSOR)
+        ResizeMode.W -> Cursor.getPredefinedCursor(Cursor.W_RESIZE_CURSOR)
+        ResizeMode.NE -> Cursor.getPredefinedCursor(Cursor.NE_RESIZE_CURSOR)
+        ResizeMode.NW -> Cursor.getPredefinedCursor(Cursor.NW_RESIZE_CURSOR)
+        ResizeMode.SE -> Cursor.getPredefinedCursor(Cursor.SE_RESIZE_CURSOR)
+        ResizeMode.SW -> Cursor.getPredefinedCursor(Cursor.SW_RESIZE_CURSOR)
+        else -> Cursor.getDefaultCursor()
+    }
+
+    fun deleteSelected() {
+        if (selectedWidgets.isEmpty()) return
+        val targets = selectedWidgets.toList()
+        targets.forEach { removeWidget(it) }
+        selectedWidgets.clear()
+        selected = null
+        pushHistory()
+        repaint()
+    }
+
+    private fun removeWidget(dw: DesignWidget) {
+        if (dw.model.parent == null) {
+            model.widgets.remove(dw.model)
+        } else {
+            dw.model.parent!!.children.remove(dw.model)
+        }
+        dw.model.children.forEach { child ->
+            getDesignWidget(child)?.let { removeWidget(it) }
+        }
+        designWidgets.remove(dw)
+        remove(dw.component)
     }
 
     data class DesignWidget(val model: WidgetModel, val component: JComponent)

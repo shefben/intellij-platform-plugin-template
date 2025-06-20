@@ -8,27 +8,74 @@ import javax.swing.JTree
 import javax.swing.tree.DefaultMutableTreeNode
 import javax.swing.tree.DefaultTreeModel
 import javax.swing.tree.TreePath
+import javax.swing.event.TreeSelectionEvent
+import javax.swing.event.TreeSelectionListener
+import javax.swing.JOptionPane
+import javax.swing.tree.DefaultTreeCellRenderer
 
 /** Panel showing a tree representation of the widget hierarchy. */
 class HierarchyPanel(private val design: DesignAreaPanel) : JPanel(BorderLayout()) {
     private val rootNode = DefaultMutableTreeNode("Dialog")
     private val treeModel = DefaultTreeModel(rootNode)
     private val tree = JTree(treeModel)
-
+    
     init {
         add(JScrollPane(tree), BorderLayout.CENTER)
-        tree.addTreeSelectionListener {
-            val path = it.path
+        tree.isEditable = true
+        tree.cellRenderer = object : DefaultTreeCellRenderer() {
+            override fun getTreeCellRendererComponent(tree: JTree?, value: Any?, selected: Boolean, expanded: Boolean, leaf: Boolean, row: Int, hasFocus: Boolean): java.awt.Component {
+                val c = super.getTreeCellRendererComponent(tree, value, selected, expanded, leaf, row, hasFocus)
+                val node = value as DefaultMutableTreeNode
+                val w = node.userObject as? WidgetModel
+                if (w != null) text = w.properties["name"] ?: w.type
+                return c
+            }
+        }
+        tree.addTreeSelectionListener(TreeSelectionListener { e: TreeSelectionEvent ->
+            val path = e.path
             val node = path.lastPathComponent as? DefaultMutableTreeNode
             val model = node?.userObject as? WidgetModel
             model?.let { m -> design.selectModel(m) }
+        })
+
+        val menu = javax.swing.JPopupMenu()
+        val rename = javax.swing.JMenuItem("Rename")
+        val delete = javax.swing.JMenuItem("Delete")
+        menu.add(rename); menu.add(delete)
+        rename.addActionListener {
+            val node = tree.selectionPath?.lastPathComponent as? DefaultMutableTreeNode ?: return@addActionListener
+            val w = node.userObject as? WidgetModel ?: return@addActionListener
+            val newName = JOptionPane.showInputDialog(this, "New name", w.properties["name"] ?: w.type)
+            if (newName != null) { w.properties["name"] = newName; treeModel.nodeChanged(node) }
         }
+        delete.addActionListener {
+            val node = tree.selectionPath?.lastPathComponent as? DefaultMutableTreeNode ?: return@addActionListener
+            val w = node.userObject as? WidgetModel ?: return@addActionListener
+            design.selectModel(w)
+            design.deleteSelected()
+            refresh()
+        }
+        tree.addMouseListener(object : java.awt.event.MouseAdapter() {
+            override fun mousePressed(e: java.awt.event.MouseEvent) {
+                if (e.isPopupTrigger || e.button == java.awt.event.MouseEvent.BUTTON3) {
+                    tree.selectionPath = tree.getPathForLocation(e.x, e.y)
+                    menu.show(tree, e.x, e.y)
+                }
+            }
+            override fun mouseReleased(e: java.awt.event.MouseEvent) {
+                if (e.isPopupTrigger || e.button == java.awt.event.MouseEvent.BUTTON3) {
+                    tree.selectionPath = tree.getPathForLocation(e.x, e.y)
+                    menu.show(tree, e.x, e.y)
+                }
+            }
+        })
     }
 
     fun refresh() {
         rootNode.removeAllChildren()
         design.model.widgets.forEach { addNode(rootNode, it) }
         treeModel.reload()
+        tree.expandRow(0)
     }
 
     private fun addNode(parent: DefaultMutableTreeNode, w: WidgetModel) {

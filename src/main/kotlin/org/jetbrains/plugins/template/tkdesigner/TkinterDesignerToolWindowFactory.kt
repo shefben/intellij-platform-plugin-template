@@ -13,6 +13,7 @@ import org.jetbrains.plugins.template.tkdesigner.ui.ComponentPalette
 import org.jetbrains.plugins.template.tkdesigner.ui.DesignAreaPanel
 import org.jetbrains.plugins.template.tkdesigner.ui.PropertyPanel
 import org.jetbrains.plugins.template.tkdesigner.ui.HierarchyPanel
+import org.jetbrains.plugins.template.tkdesigner.DesignerSettings
 import java.awt.BorderLayout
 import kotlin.io.path.createTempFile
 import javax.swing.JButton
@@ -21,9 +22,13 @@ import javax.swing.JSplitPane
 
 class TkinterDesignerToolWindowFactory : ToolWindowFactory {
     override fun createToolWindowContent(project: Project, toolWindow: ToolWindow) {
-        val projectModel = DesignProject().apply { basePath = project.basePath ?: "" }
+        val settings = DesignerSettings.instance()
+        val projectModel = DesignProject().apply {
+            basePath = project.basePath ?: ""
+            pythonInterpreter = settings.state.interpreter
+        }
         var model = projectModel.activeDialog
-        val designArea = DesignAreaPanel(model)
+        val designArea = DesignAreaPanel(model, projectModel).apply { gridSize = settings.state.gridSize }
         val palette = ComponentPalette(designArea)
         val properties = PropertyPanel(designArea, projectModel).apply { isVisible = false }
         val hierarchy = HierarchyPanel(designArea)
@@ -61,6 +66,11 @@ class TkinterDesignerToolWindowFactory : ToolWindowFactory {
         val dialogChooser = javax.swing.JComboBox<String>().apply { addItem("Dialog 1") }
         val addDialog = JButton("+")
         val pythonField = JBTextField(projectModel.pythonInterpreter, 10)
+        pythonField.document.addDocumentListener(object : com.intellij.ui.DocumentAdapter() {
+            override fun textChanged(e: javax.swing.event.DocumentEvent) {
+                settings.state.interpreter = pythonField.text
+            }
+        })
         val group = JButton("Group")
         val importButton = JButton("Import Python")
         val top = JPanel().apply {
@@ -132,6 +142,7 @@ class TkinterDesignerToolWindowFactory : ToolWindowFactory {
         previewButton.addActionListener {
             properties.applyChanges()
             projectModel.pythonInterpreter = pythonField.text
+            settings.state.interpreter = pythonField.text
             val code = TkinterGenerator.generate(designArea.model, projectModel.translations)
             try {
                 val tmp = kotlin.io.path.createTempFile("preview", ".py").toFile()
@@ -159,6 +170,9 @@ class TkinterDesignerToolWindowFactory : ToolWindowFactory {
                 val f = java.io.File(it)
                 if (f.exists()) {
                     val loaded = TkinterImporter.importScript(f.readText())
+                    if (TkinterImporter.lastWarnings.isNotEmpty()) {
+                        Messages.showWarningDialog(project, TkinterImporter.lastWarnings.joinToString("\n"), "Import Warnings")
+                    }
                     projectModel.dialogs.clear(); projectModel.dialogs.add(loaded)
                     dialogChooser.removeAllItems(); dialogChooser.addItem("Dialog 1")
                     model = loaded
@@ -186,7 +200,13 @@ class TkinterDesignerToolWindowFactory : ToolWindowFactory {
         val content = ContentFactory.getInstance().createContent(panel, null, false)
         toolWindow.contentManager.addContent(content)
 
-        palette.setLocation(200, 200)
+        palette.setLocation(settings.state.paletteX, settings.state.paletteY)
+        palette.addComponentListener(object : java.awt.event.ComponentAdapter() {
+            override fun componentMoved(e: java.awt.event.ComponentEvent) {
+                settings.state.paletteX = palette.x
+                settings.state.paletteY = palette.y
+            }
+        })
         palette.isVisible = true
     }
 

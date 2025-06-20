@@ -10,6 +10,7 @@ import org.jetbrains.plugins.template.tkdesigner.ui.DesignAreaPanel
 import org.jetbrains.plugins.template.tkdesigner.model.WidgetModel
 import org.jetbrains.plugins.template.tkdesigner.model.DialogModel
 import org.jetbrains.plugins.template.tkdesigner.model.DesignProject
+import org.jetbrains.plugins.template.tkdesigner.DesignerSettings
 import java.awt.GridBagConstraints
 import java.awt.GridBagLayout
 import java.beans.Introspector
@@ -229,6 +230,7 @@ class PropertyPanel(private val design: DesignAreaPanel, private val project: De
         addField("width", dialog.width.toString())
         addField("height", dialog.height.toString())
         addField("layout", dialog.layout)
+        addField("gridSize", design.gridSize.toString())
 
         val listener = object : DocumentAdapter() {
             override fun textChanged(e: DocumentEvent) { if (!updating) applyChanges() }
@@ -296,6 +298,7 @@ class PropertyPanel(private val design: DesignAreaPanel, private val project: De
                 "width" -> value.toIntOrNull()?.let { dialog.width = it }
                 "height" -> value.toIntOrNull()?.let { dialog.height = it }
                 "layout" -> { dialog.layout = value }
+                "gridSize" -> value.toIntOrNull()?.let { design.gridSize = it; org.jetbrains.plugins.template.tkdesigner.DesignerSettings.instance().state.gridSize = it }
             }
         }
         design.preferredSize = java.awt.Dimension(dialog.width, dialog.height)
