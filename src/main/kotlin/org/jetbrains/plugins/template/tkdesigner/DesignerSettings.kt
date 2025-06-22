@@ -11,7 +11,10 @@ class DesignerSettings : PersistentStateComponent<DesignerSettings.State> {
         var gridSize: Int = 10,
         var paletteX: Int = 200,
         var paletteY: Int = 200,
-        var interpreter: String = "python"
+        var paletteColumns: Int = 4,
+        var interpreter: String = "python",
+        var extraWidgets: MutableList<String> = mutableListOf(),
+        var shortcuts: MutableMap<String, String> = mutableMapOf()
     )
 
     private var myState = State()

@@ -21,34 +21,45 @@ object TkinterGenerator {
         builder.appendLine("root.geometry(\"${model.width}x${model.height}\")")
         val rootManager = model.layout
         fun renderWidget(w: WidgetModel, parent: String, index: Int) {
-            val name = "${w.type.lowercase()}_${index}"
+            val name = w.properties["name"] ?: "${w.type.lowercase()}_${index}"
             val textExpr = w.properties["textKey"]?.let { "tr(\"$it\")" } ?: "\"${w.properties["text"] ?: ""}\""
-            when (w.type) {
-                "Button" -> builder.appendLine("$name = tk.Button($parent, text=$textExpr)")
-                "Label" -> builder.appendLine("$name = tk.Label($parent, text=$textExpr)")
-                "Entry" -> builder.appendLine("$name = tk.Entry($parent)")
-                "Text" -> builder.appendLine("$name = tk.Text($parent)")
-                "Frame" -> builder.appendLine("$name = tk.Frame($parent)")
-                "Canvas" -> builder.appendLine("$name = tk.Canvas($parent)")
-                "Menu" -> builder.appendLine("$name = tk.Menu($parent)")
-                "Menubutton" -> builder.appendLine("$name = tk.Menubutton($parent, text=$textExpr)")
-                "PanedWindow" -> builder.appendLine("$name = tk.PanedWindow($parent)")
-                "Scrollbar" -> builder.appendLine("$name = tk.Scrollbar($parent)")
-                "Checkbutton" -> builder.appendLine("$name = tk.Checkbutton($parent, text=$textExpr)")
-                "Radiobutton" -> builder.appendLine("$name = tk.Radiobutton($parent, text=$textExpr)")
-                "Listbox" -> builder.appendLine("$name = tk.Listbox($parent)")
-                "Scale" -> builder.appendLine("$name = tk.Scale($parent, from_=0, to=100)")
-                "Spinbox" -> builder.appendLine("$name = tk.Spinbox($parent, from_=0, to=10)")
+
+            val options = mutableListOf<String>()
+            w.properties.forEach { (k, v) ->
+                if (k in listOf("row", "column", "text", "textKey", "image", "name")) return@forEach
+                val value = v.toIntOrNull() ?: v.toDoubleOrNull() ?: v
+                val expr = if (value is Number) value.toString() else "\"$v\""
+                options += "$k=$expr"
             }
+            if (w.properties.containsKey("text") || w.properties.containsKey("textKey")) {
+                options += "text=$textExpr"
+            }
+
+            val typeExpr = if (w.type.startsWith("ttk.")) "tkinter.ttk.${w.type.substringAfter('.') }" else "tk.${w.type}"
+            builder.appendLine("$name = $typeExpr($parent${if (options.isNotEmpty()) ", " + options.joinToString(", ") else ""})")
+
             w.properties["image"]?.let {
                 builder.appendLine("${name}_img = tk.PhotoImage(file=r'${it}')")
                 builder.appendLine("$name.configure(image=${name}_img)")
             }
-            when ((w.parent?.layout ?: rootManager)) {
-                "pack" -> builder.appendLine("$name.pack()")
-                "grid" -> builder.appendLine("$name.grid(row=${w.properties["row"] ?: 0}, column=${w.properties["column"] ?: 0})")
+
+            val layout = w.layout.ifEmpty { w.parent?.layout ?: rootManager }
+            when (layout) {
+                "pack" -> {
+                    val packOpts = listOf("side", "fill", "expand", "padx", "pady").mapNotNull { key ->
+                        w.properties[key]?.let { "$key=${it}" }
+                    }
+                    builder.appendLine("$name.pack(${packOpts.joinToString(", ")})")
+                }
+                "grid" -> {
+                    val row = w.properties["row"] ?: "0"
+                    val col = w.properties["column"] ?: "0"
+                    val sticky = w.properties["sticky"]?.let { ", sticky=\"$it\"" } ?: ""
+                    builder.appendLine("$name.grid(row=$row, column=$col$sticky)")
+                }
                 else -> builder.appendLine("$name.place(x=${w.x}, y=${w.y}, width=${w.width}, height=${w.height})")
             }
+
             for ((event, cb) in w.events) {
                 builder.appendLine("$name.bind(\"$event\", lambda e: $cb())")
             }

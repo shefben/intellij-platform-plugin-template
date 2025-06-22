@@ -8,6 +8,7 @@ import java.awt.event.MouseEvent
 import javax.swing.JComponent
 import javax.swing.JLayeredPane
 import org.jetbrains.plugins.template.tkdesigner.model.DesignProject
+import org.jetbrains.plugins.template.tkdesigner.model.CustomWidgetRegistry
 
 private enum class ResizeMode { NONE, N, S, E, W, NE, NW, SE, SW }
 
@@ -228,12 +229,18 @@ class DesignAreaPanel(var model: DialogModel, private val project: DesignProject
 
         val im = inputMap
         val am = actionMap
-        im.put(javax.swing.KeyStroke.getKeyStroke("control Z"), "undo")
-        im.put(javax.swing.KeyStroke.getKeyStroke("control Y"), "redo")
-        im.put(javax.swing.KeyStroke.getKeyStroke("control C"), "copy")
-        im.put(javax.swing.KeyStroke.getKeyStroke("control V"), "paste")
-        im.put(javax.swing.KeyStroke.getKeyStroke("control D"), "dup")
-        im.put(javax.swing.KeyStroke.getKeyStroke("DELETE"), "del")
+        val shortcuts = org.jetbrains.plugins.template.tkdesigner.DesignerSettings.instance().state.shortcuts
+        fun register(action: String, default: String, runnable: () -> Unit) {
+            val ks = javax.swing.KeyStroke.getKeyStroke(shortcuts[action] ?: default)
+            if (ks != null) im.put(ks, action)
+            am.put(action, object : javax.swing.AbstractAction() { override fun actionPerformed(e: java.awt.event.ActionEvent?) { runnable() } })
+        }
+        register("undo", "control Z") { undo() }
+        register("redo", "control Y") { redo() }
+        register("copy", "control C") { copySelection() }
+        register("paste", "control V") { paste() }
+        register("dup", "control D") { duplicate() }
+        register("del", "DELETE") { deleteSelected() }
         am.put("undo", object : javax.swing.AbstractAction() { override fun actionPerformed(e: java.awt.event.ActionEvent?) { undo() } })
         am.put("redo", object : javax.swing.AbstractAction() { override fun actionPerformed(e: java.awt.event.ActionEvent?) { redo() } })
         am.put("copy", object : javax.swing.AbstractAction() { override fun actionPerformed(e: java.awt.event.ActionEvent?) { copySelection() } })
@@ -305,6 +312,8 @@ class DesignAreaPanel(var model: DialogModel, private val project: DesignProject
 
     private fun snap(value: Int): Int = (value / gridSize) * gridSize
 
+    fun recordHistory() = pushHistory()
+
     private fun pushHistory() {
         if (historyIndex < history.size - 1) {
             history.subList(historyIndex + 1, history.size).clear()
@@ -339,7 +348,8 @@ class DesignAreaPanel(var model: DialogModel, private val project: DesignProject
         }
     }
 
-    private fun createComponent(model: WidgetModel): JComponent = when (val t = resolveBaseType(model.type)) {
+    private fun createComponent(model: WidgetModel): JComponent = CustomWidgetRegistry.create(model.type)
+        ?: when (val t = resolveBaseType(model.type)) {
         "Button" -> javax.swing.JButton(model.properties["text"] ?: "Button")
         "Label" -> javax.swing.JLabel(model.properties["text"] ?: "Label")
         "Entry" -> javax.swing.JTextField()

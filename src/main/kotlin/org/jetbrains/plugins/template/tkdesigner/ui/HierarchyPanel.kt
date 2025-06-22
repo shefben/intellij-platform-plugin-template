@@ -22,6 +22,40 @@ class HierarchyPanel(private val design: DesignAreaPanel) : JPanel(BorderLayout(
     init {
         add(JScrollPane(tree), BorderLayout.CENTER)
         tree.isEditable = true
+        tree.dragEnabled = true
+        tree.dropMode = javax.swing.DropMode.ON_OR_INSERT
+        tree.transferHandler = object : javax.swing.TransferHandler() {
+            override fun getSourceActions(c: javax.swing.JComponent?) = MOVE
+
+            override fun createTransferable(c: javax.swing.JComponent?): java.awt.datatransfer.Transferable {
+                val node = tree.selectionPath?.lastPathComponent as? DefaultMutableTreeNode ?: return object : java.awt.datatransfer.StringSelection("") {}
+                return object : java.awt.datatransfer.StringSelection(node.toString()) {
+                    val dragged = node
+                    override fun lostOwnership(clipboard: java.awt.datatransfer.Clipboard?, contents: java.awt.datatransfer.Transferable?) {}
+                }
+            }
+
+            override fun importData(support: javax.swing.TransferHandler.TransferSupport): Boolean {
+                val drop = support.dropLocation as? JTree.DropLocation ?: return false
+                val target = drop.path.lastPathComponent as? DefaultMutableTreeNode ?: return false
+                val dragged = tree.selectionPath?.lastPathComponent as? DefaultMutableTreeNode ?: return false
+                if (dragged === target || dragged.isNodeAncestor(target)) return false
+
+                val dModel = dragged.userObject as? WidgetModel ?: return false
+                val tModel = target.userObject as? WidgetModel
+
+                (dragged.parent as? DefaultMutableTreeNode)?.remove(dragged)
+                treeModel.nodesWereRemoved(dragged.parent as DefaultMutableTreeNode, intArrayOf(0), arrayOf(dragged))
+                target.add(dragged)
+                treeModel.reload(target)
+
+                dModel.parent?.children?.remove(dModel) ?: design.model.widgets.remove(dModel)
+                if (tModel == null) { design.model.widgets.add(dModel); dModel.parent = null } else { dModel.parent = tModel; tModel.children.add(dModel) }
+                design.refreshWidget(dModel)
+                design.revalidate(); design.repaint()
+                return true
+            }
+        }
         tree.cellRenderer = object : DefaultTreeCellRenderer() {
             override fun getTreeCellRendererComponent(tree: JTree?, value: Any?, selected: Boolean, expanded: Boolean, leaf: Boolean, row: Int, hasFocus: Boolean): java.awt.Component {
                 val c = super.getTreeCellRendererComponent(tree, value, selected, expanded, leaf, row, hasFocus)

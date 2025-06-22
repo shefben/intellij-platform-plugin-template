@@ -2,18 +2,23 @@
 <idea-plugin>
     <id>org.jetbrains.plugins.tkdesigner</id>
     <name>Visual Tkinter Designer</name>
-    <vendor>JetBrains</vendor>
+    <vendor url="https://github.com/openai">Codex</vendor>
 
     <depends>com.intellij.modules.platform</depends>
 
-    <resource-bundle>messages.MyBundle</resource-bundle>
+    <resource-bundle>messages.TkDesignerBundle</resource-bundle>
+    <icon>icons/pluginIcon.svg</icon>
 
     <extensions defaultExtensionNs="com.intellij">
         <toolWindow factoryClass="org.jetbrains.plugins.template.tkdesigner.TkinterDesignerToolWindowFactory" id="TkinterDesigner" anchor="right"/>
         <diffTool implementation="org.jetbrains.plugins.template.tkdesigner.TkdesignDiffTool"/>
         <applicationService serviceImplementation="org.jetbrains.plugins.template.tkdesigner.DesignerSettings"/>
+        <applicationConfigurable id="tkdesigner" displayName="Tkinter Designer" instance="org.jetbrains.plugins.template.tkdesigner.settings.DesignerSettingsConfigurable"/>
+        <configurationType implementation="org.jetbrains.plugins.template.tkdesigner.run.TkPreviewRunConfigurationType"/>
+        <extensionPoint name="customWidget" interface="org.jetbrains.plugins.template.tkdesigner.model.CustomWidgetRegistrar"/>
     </extensions>
     <actions>
-        <action id="TkinterDesigner.Open" class="org.jetbrains.plugins.template.tkdesigner.OpenDesignerAction" text="Open Tkinter Designer" description="Open the Tkinter designer tool window"/>
+        <action id="TkinterDesigner.Open" class="org.jetbrains.plugins.template.tkdesigner.OpenDesignerAction"
+                text="%action.openDesigner.text" description="%action.openDesigner.description"/>
     </actions>
 </idea-plugin>

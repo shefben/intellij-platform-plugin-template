@@ -11,12 +11,15 @@ import org.jetbrains.plugins.template.tkdesigner.model.WidgetModel
 import org.jetbrains.plugins.template.tkdesigner.model.DialogModel
 import org.jetbrains.plugins.template.tkdesigner.model.DesignProject
 import org.jetbrains.plugins.template.tkdesigner.DesignerSettings
+import com.intellij.ui.HideableDecorator
+import java.awt.BorderLayout
 import java.awt.GridBagConstraints
 import java.awt.GridBagLayout
 import java.beans.Introspector
 import javax.swing.JLabel
 import javax.swing.JPanel
 import javax.swing.JComponent
+import javax.swing.BorderFactory
 
 /**
  * Panel showing properties of selected widget.
@@ -25,14 +28,67 @@ import com.intellij.ui.DocumentAdapter
 import javax.swing.event.DocumentEvent
 
 class PropertyPanel(private val design: DesignAreaPanel, private val project: DesignProject) : JPanel(GridBagLayout()) {
+    private val filterField = JBTextField()
+
+    private fun createSection(title: String): Pair<JPanel, JPanel> {
+        val wrapper = JPanel(BorderLayout())
+        val content = JPanel(GridBagLayout())
+        val decorator = HideableDecorator(wrapper, title, true)
+        decorator.setContentComponent(content)
+        decorator.setOn(true)
+        return wrapper to content
+    }
+
+    private val layoutPair = createSection("Layout")
+    private val stylePair = createSection("Style")
+    private val eventPair = createSection("Events")
+    private val layoutPanel get() = layoutPair.first
+    private val stylePanel get() = stylePair.first
+    private val eventPanel get() = eventPair.first
+    private val layoutContent get() = layoutPair.second
+    private val styleContent get() = stylePair.second
+    private val eventContent get() = eventPair.second
 
     private var fields = mutableMapOf<String, JComponent>()
+    private var labels = mutableMapOf<String, JLabel>()
     private var currentWidget: WidgetModel? = null
     private var currentDialog: DialogModel? = null
     private var updating = false
 
+    init {
+        val c = GridBagConstraints()
+        c.insets = java.awt.Insets(2,2,2,2)
+        c.gridx = 0
+        c.gridy = 0
+        c.weightx = 1.0
+        c.fill = GridBagConstraints.HORIZONTAL
+        add(filterField, c)
+        c.gridy = 1
+        add(layoutPanel, c)
+        c.gridy = 2
+        add(stylePanel, c)
+        c.gridy = 3
+        add(eventPanel, c)
+
+        filterField.emptyText.text = "Filter"
+        filterField.document.addDocumentListener(object : DocumentAdapter() {
+            override fun textChanged(e: DocumentEvent) { applyFilter() }
+        })
+    }
+
+    private fun applyFilter() {
+        val text = filterField.text.lowercase()
+        fields.forEach { (name, comp) ->
+            val label = labels[name]
+            val visible = text.isBlank() || name.lowercase().contains(text)
+            comp.isVisible = visible
+            label?.isVisible = visible
+        }
+        revalidate(); repaint()
+    }
+
     fun bind(widget: WidgetModel?) {
-        removeAll()
+        layoutContent.removeAll(); styleContent.removeAll(); eventContent.removeAll()
         fields.clear()
         updating = true
         currentDialog = null
@@ -49,9 +105,12 @@ class PropertyPanel(private val design: DesignAreaPanel, private val project: De
         c.insets = java.awt.Insets(2, 2, 2, 2)
         c.anchor = GridBagConstraints.NORTHWEST
 
-        var row = 0
-        fun addField(name: String, value: String, type: Class<*>? = null) {
+        var layoutRow = 0
+        var styleRow = 0
+        var eventRow = 0
+        fun addField(panel: JPanel, row: Int, name: String, value: String, type: Class<*>? = null): Int {
             val label = JLabel("$name:")
+            labels[name] = label
             val comp: JComponent = when {
                 name == "layout" -> javax.swing.JComboBox(arrayOf("place", "pack", "grid")).apply {
                     selectedItem = value
@@ -86,14 +145,13 @@ class PropertyPanel(private val design: DesignAreaPanel, private val project: De
                             applyChanges()
                         }
                     }
-                    val panel = javax.swing.JPanel(java.awt.BorderLayout())
-                    panel.add(field, java.awt.BorderLayout.CENTER)
-                    panel.add(browse, java.awt.BorderLayout.EAST)
+                    val panel2 = javax.swing.JPanel(java.awt.BorderLayout())
+                    panel2.add(field, java.awt.BorderLayout.CENTER)
+                    panel2.add(browse, java.awt.BorderLayout.EAST)
                     fields[name] = field
-                    c.gridx = 0; c.gridy = row; add(label, c)
-                    c.gridx = 1; add(panel, c)
-                    row++
-                    return
+                    c.gridx = 0; c.gridy = row; panel.add(label, c)
+                    c.gridx = 1; panel.add(panel2, c)
+                    return row + 1
                 }
                 name.contains("font", true) || type == java.awt.Font::class.java -> javax.swing.JButton(value).apply {
                     putClientProperty("value", value)
@@ -119,14 +177,13 @@ class PropertyPanel(private val design: DesignAreaPanel, private val project: De
                         val sel = javax.swing.JOptionPane.showInputDialog(this, "Snippet", "Choose", javax.swing.JOptionPane.PLAIN_MESSAGE, null, opts, opts.first())
                         if (sel != null) { field.text = snippets[sel] ?: ""; applyChanges() }
                     }
-                    val panel = javax.swing.JPanel(java.awt.BorderLayout())
-                    panel.add(field, java.awt.BorderLayout.CENTER)
-                    panel.add(choose, java.awt.BorderLayout.EAST)
+                    val panel2 = javax.swing.JPanel(java.awt.BorderLayout())
+                    panel2.add(field, java.awt.BorderLayout.CENTER)
+                    panel2.add(choose, java.awt.BorderLayout.EAST)
                     fields[name] = field
-                    c.gridx = 0; c.gridy = row; add(label, c)
-                    c.gridx = 1; add(panel, c)
-                    row++
-                    return
+                    c.gridx = 0; c.gridy = row; panel.add(label, c)
+                    c.gridx = 1; panel.add(panel2, c)
+                    return row + 1
                 }
                 name == "text" -> JBTextField(value).also { field ->
                     val tButton = javax.swing.JButton("T")
@@ -138,32 +195,28 @@ class PropertyPanel(private val design: DesignAreaPanel, private val project: De
                             map[key] = field.text
                         }
                     }
-                    val panel = javax.swing.JPanel(java.awt.BorderLayout())
-                    panel.add(field, java.awt.BorderLayout.CENTER)
-                    panel.add(tButton, java.awt.BorderLayout.EAST)
+                    val panel2 = javax.swing.JPanel(java.awt.BorderLayout())
+                    panel2.add(field, java.awt.BorderLayout.CENTER)
+                    panel2.add(tButton, java.awt.BorderLayout.EAST)
                     fields[name] = field
-                    c.gridx = 0; c.gridy = row; add(label, c)
-                    c.gridx = 1; add(panel, c)
-                    row++
-                    return
+                    c.gridx = 0; c.gridy = row; panel.add(label, c)
+                    c.gridx = 1; panel.add(panel2, c)
+                    return row + 1
                 }
                 else -> JBTextField(value)
             }
             fields[name] = comp
-            c.gridx = 0
-            c.gridy = row
-            add(label, c)
-            c.gridx = 1
-            add(comp, c)
-            row++
+            c.gridx = 0; c.gridy = row; panel.add(label, c)
+            c.gridx = 1; panel.add(comp, c)
+            return row + 1
         }
 
-        addField("x", widget.x.toString())
-        addField("y", widget.y.toString())
-        addField("width", widget.width.toString())
-        addField("height", widget.height.toString())
+        layoutRow = addField(layoutContent, layoutRow, "x", widget.x.toString())
+        layoutRow = addField(layoutContent, layoutRow, "y", widget.y.toString())
+        layoutRow = addField(layoutContent, layoutRow, "width", widget.width.toString())
+        layoutRow = addField(layoutContent, layoutRow, "height", widget.height.toString())
         if (widget.children.isNotEmpty() || widget.type == "Frame" || widget.type == "Canvas") {
-            addField("layout", widget.layout)
+            layoutRow = addField(layoutContent, layoutRow, "layout", widget.layout)
         }
 
         val designWidget = design.getDesignWidget(widget)
@@ -173,18 +226,18 @@ class PropertyPanel(private val design: DesignAreaPanel, private val project: De
                 if (pd.writeMethod != null && pd.readMethod != null && pd.name != "class") {
                     val value = try { pd.readMethod.invoke(dw.component)?.toString() ?: "" } catch (e: Exception) { "" }
                     if (!fields.containsKey(pd.name)) {
-                        addField(pd.name, value, pd.propertyType)
+                        styleRow = addField(styleContent, styleRow, pd.name, value, pd.propertyType)
                     }
                 }
             }
         }
 
         for ((k, v) in widget.properties) {
-            if (k != "textKey" && !fields.containsKey(k)) addField(k, v)
+            if (k != "textKey" && !fields.containsKey(k)) styleRow = addField(styleContent, styleRow, k, v)
         }
         for ((k, v) in widget.events) {
             val name = "on_$k"
-            if (!fields.containsKey(name)) addField(name, v)
+            if (!fields.containsKey(name)) eventRow = addField(eventContent, eventRow, name, v)
         }
 
         val listener = object : DocumentAdapter() {
@@ -199,12 +252,13 @@ class PropertyPanel(private val design: DesignAreaPanel, private val project: De
         }
 
         updating = false
+        applyFilter()
         revalidate()
         repaint()
     }
 
     fun bindDialog(dialog: DialogModel) {
-        removeAll()
+        layoutContent.removeAll(); styleContent.removeAll(); eventContent.removeAll()
         fields.clear()
         updating = true
         currentWidget = null
@@ -218,12 +272,10 @@ class PropertyPanel(private val design: DesignAreaPanel, private val project: De
         fun addField(name: String, value: String) {
             val label = JLabel("$name:")
             val field = JBTextField(value)
+            labels[name] = label
             fields[name] = field
-            c.gridx = 0
-            c.gridy = row
-            add(label, c)
-            c.gridx = 1
-            add(field, c)
+            c.gridx = 0; c.gridy = row; layoutContent.add(label, c)
+            c.gridx = 1; layoutContent.add(field, c)
             row++
         }
 
@@ -241,6 +293,7 @@ class PropertyPanel(private val design: DesignAreaPanel, private val project: De
         }
 
         updating = false
+        applyFilter()
         revalidate()
         repaint()
     }
@@ -248,6 +301,7 @@ class PropertyPanel(private val design: DesignAreaPanel, private val project: De
     fun applyChanges() {
         currentWidget?.let { applyWidgetChanges(it) }
         currentDialog?.let { applyDialogChanges(it) }
+        design.recordHistory()
     }
 
     private fun applyWidgetChanges(widget: WidgetModel) {
